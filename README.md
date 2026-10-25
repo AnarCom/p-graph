@@ -1,8 +1,15 @@
-# Архитектура платформы
+# p-graph
 
-Платформа для описания и выполнения вычислительных pipeline в виде ориентированного графа (DAG) с запуском операций на Kubernetes.
+> Платформа для описания и выполнения вычислительных pipeline в виде ориентированного графа (DAG) с запуском операций на Kubernetes.
 
-## 1. Общая карта компонентов
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-minikube-326CE5?logo=kubernetes&logoColor=white)](https://minikube.sigs.k8s.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![MinIO](https://img.shields.io/badge/MinIO-S3%20артефакты-C72E49?logo=minio&logoColor=white)](https://min.io)
+
+## Общая карта компонентов
 
 ```mermaid
 flowchart LR
@@ -23,7 +30,7 @@ flowchart LR
         S3[("S3 / MinIO<br/>артефакты данных<br/>+ логи операций")]
     end
 
-    subgraph K8s["Kubernetes (kind / minikube)"]
+    subgraph K8s["Kubernetes (minikube)"]
         JOB1["Job → Pod<br/>операция A"]
         JOB2["Job → Pod<br/>операция B"]
         JOBN["Job → Pod<br/>операция N"]
@@ -44,15 +51,33 @@ flowchart LR
     JOBN -- "артефакты" --> S3
 ```
 
-Границы между сервисами:
+## Структура репозитория
 
-- **API Server** — синхронный сервис «для UI»: CRUD, валидация, отдача статусов. Не знает про Kubernetes.
-- **Orchestrator** — фоновый сервис с watch-циклом. **Единственная точка доступа к Kubernetes**: создание Job, watch, сбор логов. API проксирует запросы логов UI через него.
-- **PostgreSQL — источник истины по статусам.** Orchestrator пишет статусы в БД, API читает их (LISTEN/NOTIFY или polling) и раздаёт в UI через WebSocket/SSE. Рестарт любого из сервисов не теряет состояние.
-- **Логи всегда из MinIO**: Orchestrator записывает лог один раз — по завершении операции (полный лог пода через K8s API); API отдаёт логи из MinIO после терминального статуса, во время выполнения логов нет (детали в разделе 6).
-- Запуск/отмена — внутренний REST-вызов API → Orchestrator. Альтернатива без прямого вызова: Orchestrator сам забирает новые run'ы из БД (polling) — тогда связность ещё ниже, но задержка старта выше.
+Монорепозиторий: Go-модуль в корне, инфраструктура — `deploy/`. Пустые каталоги каркаса содержат `.gitkeep` (git не трекает пустые директории) — файлы удаляются по мере появления кода.
 
-## 2. Жизненный цикл запуска pipeline
+```
+p-graph/
+├── cmd/                        # точки входа (по сервису на каталог)
+│   ├── apiserver/              #   API Server: REST + WebSocket/SSE
+│   └── orchestrator/           #   Orchestrator: планировщик, K8s watch
+├── internal/
+│   ├── model/                  # доменные типы: Pipeline, Run, Operation, статусы
+│   ├── api/                    # HTTP-хендлеры API Server
+│   ├── orchestrator/           # ядро исполнения: планирование run'ов
+│   ├── storage/                # PostgreSQL + миграции
+│   │   └── migrations/         #   SQL-миграции (golang-migrate), схема — только через них
+│   ├── artifacts/              # S3/MinIO клиент: artifacts/{run_id}/{node_id}, логи
+│   └── k8s/                    # создание Job, watch, сбор логов Pod'ов
+├── deploy/
+│   ├── docker/                 # Dockerfiles сервисов
+│   └── k8s/                    # манифесты для кластера (ingress, MinIO и т.д.)
+├── go.mod                      # module github.com/dsidorkin/p-graph
+├── CLAUDE.md                   # соглашения проекта
+├── LICENSE                     # Apache License 2.0
+└── README.md
+```
+
+## Жизненный цикл запуска pipeline
 
 ```mermaid
 sequenceDiagram
@@ -108,7 +133,7 @@ sequenceDiagram
     API-->>UI: логи
 ```
 
-## 3. Машина состояний операции
+## Машина состояний операции
 
 ```mermaid
 stateDiagram-v2
