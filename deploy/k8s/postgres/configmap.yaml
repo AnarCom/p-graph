@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: pgraph
+data:
+  POSTGRES_DB: pgraph
+  POSTGRES_USER: pgraph

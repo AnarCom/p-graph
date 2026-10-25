@@ -71,11 +71,36 @@ p-graph/
 ├── migrations/                 # SQL-миграции, схема БД меняется только через них
 ├── deploy/
 │   ├── docker/                 # Dockerfiles сервисов
-│   └── k8s/                    # манифесты для кластера (ingress, MinIO и т.д.)
+│   └── k8s/                    # манифесты кластера: каталог = приложение
+│       ├── postgres/           #   БД (deployment, service, pvc)
+│       ├── minio/              #   S3-хранилище (deployment, service, ingress)
+│       ├── apiserver/          #   API Server (deployment, service, ingress)
+│       ├── orchestrator/       #   Orchestrator (deployment, service, rbac)
+│       └── argo/               #   Argo (ingress, configmap)
 ├── go.mod                      # module github.com/dsidorkin/p-graph
 ├── CLAUDE.md                   # соглашения проекта
 ├── LICENSE                     # Apache License 2.0
 └── README.md
+```
+
+## Локальный запуск (minikube)
+
+Требуется: [minikube](https://minikube.sigs.k8s.io/docs/start/), `kubectl`, драйвер docker.
+
+```bash
+# 1. Поднять кластер с ingress-контроллером (один раз)
+minikube start --driver=docker
+minikube addons enable ingress
+
+# 2. Применить все манифесты (namespace pgraph)
+kubectl apply -k deploy/k8s
+
+# 3. Проверить, что всё поднялось
+kubectl get pods -n pgraph
+
+# 4. Подключиться к PostgreSQL с ноутбука (порт кластера напрямую недоступен на macOS)
+kubectl port-forward svc/postgres 5432:5432 -n pgraph
+psql -h 127.0.0.1 -U pgraph -d pgraph
 ```
 
 ## Жизненный цикл запуска pipeline
