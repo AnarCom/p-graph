@@ -1,0 +1,15 @@
+# IDE
+.idea/
+.vscode/
+
+# Go
+/bin/
+
+# Frontend
+ui/node_modules/
+ui/dist/
+
+# Локальные данные (MinIO и т.п.)
+minio-data/
+*.log
+.env
