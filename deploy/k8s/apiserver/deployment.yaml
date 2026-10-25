@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apiserver
+  namespace: pgraph
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apiserver
+  template:
+    metadata:
+      labels:
+        app: apiserver
+    spec:
+      containers:
+        - image: pgraph-apiserver:v1
+          imagePullPolicy: IfNotPresent
+          name: apiserver
+          envFrom:
+            - configMapRef:
+                name: apiserver-config
+          ports:
+            - containerPort: 8080
