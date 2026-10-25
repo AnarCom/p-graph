@@ -77,7 +77,7 @@ p-graph/
 │       ├── apiserver/          #   API Server (deployment, service, ingress)
 │       ├── orchestrator/       #   Orchestrator (deployment, service, rbac)
 │       └── argo/               #   Argo (ingress, configmap)
-├── go.mod                      # module github.com/dsidorkin/p-graph
+├── go.mod                      # module github.com/AnarCom/p-graph
 ├── CLAUDE.md                   # соглашения проекта
 ├── LICENSE                     # Apache License 2.0
 └── README.md
@@ -92,13 +92,17 @@ p-graph/
 minikube start --driver=docker
 minikube addons enable ingress
 
-# 2. Применить все манифесты (namespace pgraph)
-kubectl apply -f deploy/k8s
+# 2. Собрать образ apiserver и загрузить его в minikube
+docker build -f deploy/docker/apiserver/Dockerfile -t pgraph-apiserver:v1 .
+minikube image load pgraph-apiserver:v1
 
-# 3. Проверить, что всё поднялось
+# 3. Применить все манифесты (namespace pgraph)
+kubectl apply -k deploy/k8s
+
+# 4. Проверить, что всё поднялось
 kubectl get pods -n pgraph
 
-# 4. Подключиться к PostgreSQL с ноутбука (порт кластера напрямую недоступен на macOS)
+# 5. Подключиться к PostgreSQL (порт кластера напрямую недоступен на macOS)
 kubectl port-forward svc/postgres 5432:5432 -n pgraph
 psql -h 127.0.0.1 -U pgraph -d pgraph
 ```

@@ -19,35 +19,34 @@ type Migrator struct {
 func NewMigrator(sqlFiles embed.FS, dirName string) (*Migrator, error) {
 	d, err := iofs.New(sqlFiles, dirName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open sql files: %w", err)
 	}
 	return &Migrator{
 		srcDriver: d,
 	}, nil
 }
 
-func (m *Migrator) ApplyMigrations(db *sql.DB) error {
-	var err error
+func (m *Migrator) ApplyMigrations(db *sql.DB) (err error) {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		return fmt.Errorf("unable to create db instance: %v", err)
+		return fmt.Errorf("create db instance: %w", err)
 	}
 
 	migrator, err := migrate.NewWithInstance("migration_embeded_sql_files", m.srcDriver, "psql_db", driver)
 	if err != nil {
-		return fmt.Errorf("unable to create migration: %v", err)
+		return fmt.Errorf("create migration: %w", err)
 	}
 
 	defer func() {
 		srcErr, dbErr := migrator.Close()
 		if srcErr != nil || dbErr != nil {
-			err = fmt.Errorf("unable to close migrations: %v", errors.Join(srcErr, dbErr))
+			err = fmt.Errorf("close migrations: %w", errors.Join(srcErr, dbErr))
 		}
 	}()
 
 	if err = migrator.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("unable to apply migrations %v", err)
+		return fmt.Errorf("apply migrations: %w", err)
 	}
 
-	return err
+	return nil
 }
