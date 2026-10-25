@@ -64,10 +64,11 @@ p-graph/
 │   ├── model/                  # доменные типы: Pipeline, Run, Operation, статусы
 │   ├── api/                    # HTTP-хендлеры API Server
 │   ├── orchestrator/           # ядро исполнения: планирование run'ов
-│   ├── storage/                # PostgreSQL + миграции
-│   │   └── migrations/         #   SQL-миграции (golang-migrate), схема — только через них
+│   ├── storage/                # PostgreSQL: доступ к данным
+│   ├── migrator/               # применение миграций БД
 │   ├── artifacts/              # S3/MinIO клиент: artifacts/{run_id}/{node_id}, логи
 │   └── k8s/                    # создание Job, watch, сбор логов Pod'ов
+├── migrations/                 # SQL-миграции, схема БД меняется только через них
 ├── deploy/
 │   ├── docker/                 # Dockerfiles сервисов
 │   └── k8s/                    # манифесты для кластера (ingress, MinIO и т.д.)
