@@ -110,6 +110,14 @@ psql -h 127.0.0.1 -U pgraph -d pgraph
 echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null # добавляем локальную DNS запись
 sudo minikube tunnel
 curl http://minio.local
+
+# 7. Для доступа к argo
+echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null
+curl http://argo.local
+
+# 8. Чтобы запустить workflow
+создать argo-bucket
+в argo интерфейсе запустить workflow
 ```
 
 ## Жизненный цикл запуска pipeline

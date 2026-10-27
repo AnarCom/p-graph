@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pgraph
+
+resources:
+  - namespace.yaml
+  - apiserver/configmap.yaml
+  - apiserver/deployment.yaml
+  - apiserver/service.yaml
+  - argo/base.yaml
+  - argo/configmap.yaml
+  - argo/ingress.yaml
+  - minio/ingress.yaml
+  - minio/pod.yaml
+  - minio/secret.yaml
+  - minio/service.yaml
+  - postgres/configmap.yaml
+  - postgres/pvc.yaml
+  - postgres/secret.yaml
+  - postgres/service.yaml
+  - postgres/statefulset.yaml
+
+patchesJson6902:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: argo-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - server
+          - --namespaced
+          - --auth-mode=server
