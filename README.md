@@ -105,6 +105,11 @@ kubectl get pods -n pgraph
 # 5. Подключиться к PostgreSQL (порт кластера напрямую недоступен на macOS)
 kubectl port-forward svc/postgres 5432:5432 -n pgraph
 psql -h 127.0.0.1 -U pgraph -d pgraph
+
+# 6. Для доступа к консоли minio
+echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null # добавляем локальную DNS запись
+sudo minikube tunnel
+curl http://minio.local
 ```
 
 ## Жизненный цикл запуска pipeline

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: pgraph
+spec:
+  containers:
+  - name: minio
+    image: cr.yandex/mirror/minio/minio:latest
+    command:
+    - /bin/bash
+    - -c
+    args:
+    - minio server /data --console-address :9001
+    volumeMounts:
+    - mountPath: /data
+      name: minio-data
+    ports:
+      - containerPort: 9000
+        hostPort: 9000
+      - containerPort: 9001
+        hostPort: 9001
+  volumes:
+  - name: minio-data
+    hostPath:
+      path: /var/lib/minio
+      type: DirectoryOrCreate
