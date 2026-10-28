@@ -1,0 +1,9 @@
+package: genapi
+
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+  embedded-spec: true
+
+output: internal/api/gen/api.gen.go

@@ -63,11 +63,14 @@ p-graph/
 ├── internal/
 │   ├── model/                  # доменные типы: Pipeline, Run, Operation, статусы
 │   ├── api/                    # HTTP-хендлеры API Server
+│   │   └── gen/                #   код, сгенерированный oapi-codegen (не править руками)
 │   ├── orchestrator/           # ядро исполнения: планирование run'ов
 │   ├── storage/                # PostgreSQL: доступ к данным
 │   ├── migrator/               # применение миграций БД
 │   ├── artifacts/              # S3/MinIO клиент: artifacts/{run_id}/{node_id}, логи
 │   └── k8s/                    # создание Job, watch, сбор логов Pod'ов
+├── typespec/                   # TypeSpec-описание API (источник контракта)
+├── api/                        # сгенерированный OpenAPI + конфиг oapi-codegen
 ├── migrations/                 # SQL-миграции, схема БД меняется только через них
 ├── deploy/
 │   ├── docker/                 # Dockerfiles сервисов
@@ -119,6 +122,26 @@ curl http://argo.local
 создать argo-bucket
 в argo интерфейсе запустить workflow
 ```
+
+## Генерация API-контракта (TypeSpec → OpenAPI → Go)
+
+Контракт между frontend и backend описывается в **TypeSpec** (`typespec/main.tsp`) и меняется только там — это единственный источник правды для API. Цепочка генерации:
+
+```
+typespec/main.tsp  ──(tsp compile)──▶  api/openapi.yaml  ──(oapi-codegen)──▶  internal/api/gen/api.gen.go
+```
+
+- `api/openapi.yaml` — OpenAPI 3.0, генерируется из TypeSpec; коммитится в репозиторий (по нему работает и фронтенд);
+- `internal/api/gen/api.gen.go` — Go-типы и серверные интерфейсы (`strict-server`, стандартный `net/http`); **не редактируется руками** — только перегенерацией.
+
+### Как добавить новый эндпоинт
+
+1. Убедиться, что зависимости установлены (см. выше; достаточно один раз).
+2. Описать модель и операцию в `typespec/main.tsp` (см. тестовый метод `GET /health`).
+3. `make api` — перегенерировать OpenAPI и Go-код.
+4. Реализовать сгенерированный интерфейс `StrictServerInterface` в хендлере `internal/api/`.
+
+Коммитить вместе три файла: `typespec/main.tsp`, `api/openapi.yaml`, `internal/api/gen/api.gen.go`.
 
 ## Жизненный цикл запуска pipeline
 

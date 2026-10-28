@@ -4,6 +4,7 @@
 
 # Go
 /bin/
+**/*.gen.go
 
 # Frontend
 ui/node_modules/
@@ -13,3 +14,10 @@ ui/dist/
 minio-data/
 *.log
 .env
+
+# Typespec
+typespec/node_modules/
+typespec/.npmrc
+
+# OAPI
+api/openapi.yaml

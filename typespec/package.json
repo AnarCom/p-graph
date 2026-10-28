@@ -1,0 +1,18 @@
+{
+  "name": "p-graph-api-spec",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeSpec-описание API p-graph; из него генерируется OpenAPI",
+  "type": "module",
+  "scripts": {
+    "compile": "tsp compile ."
+  },
+  "dependencies": {
+    "@typespec/http": "1.17.0",
+    "@typespec/openapi": "latest",
+    "@typespec/openapi3": "1.17.0"
+  },
+  "devDependencies": {
+    "@typespec/compiler": "1.17.0"
+  }
+}
