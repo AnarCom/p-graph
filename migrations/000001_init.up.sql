@@ -106,7 +106,7 @@ INSERT INTO node_types (type, version, title, description, category, status, inp
 (
     'builtin.end', 1,
     'Конец', 'Явно обозначить успешное завершение пайплайна', 'flow', 'active',
-    '[{"name": "in", "title": "Вход", "dataType": "control", "minConnections": 1, "maxConnections": 1}]'::jsonb,
+    '[{"name": "in", "title": "Вход", "dataType": "any", "minConnections": 1, "maxConnections": 1}]'::jsonb,
     '[]'::jsonb,
     '{"type": "object", "properties": {}, "additionalProperties": false}'::jsonb
 );

@@ -9,6 +9,7 @@
 # Frontend
 ui/node_modules/
 ui/dist/
+ui/*.tsbuildinfo
 
 # Локальные данные (MinIO и т.п.)
 minio-data/
