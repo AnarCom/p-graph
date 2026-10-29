@@ -13,42 +13,41 @@
 
 ```mermaid
 flowchart LR
-    subgraph Client
+    Client["Client"]
+    
+    subgraph K8s["Kubernetes"]
         UI["Frontend"]
-    end
+    
+        API["API Server<br/>• CRUD pipelines<br/>• валидация DAG (при сохранении)<br/>"]
+        
+        Sched["Scheduler<br/>• Распределение подов на ноды<br/>• Формирование workflows"]
+        
+        Oper["Argo Workflows<br/>• топологическая сортировка<br/>• параллельный запуск операций<br/>• создание K8s Job, watch<br/>• сбор логов Pod'ов"]
 
-    subgraph APISvc["API Server"]
-        API["API Server<br/>• CRUD pipelines<br/>• валидация DAG (при сохранении)<br/>• запуск / отмена / re-run<br/>• WebSocket/SSE статусы"]
+        subgraph Jobs["Jobs"]
+            JOB1["Job → Pod<br/>операция A"]
+            JOB2["Job → Pod<br/>операция B"]
+            JOBN["Job → Pod<br/>операция N"]
+        end
+        
+        subgraph Data["Хранилища"]
+            PG[("PostgreSQL<br/>графы, runs, статусы,<br/>метаданные логов")]
+            S3[("S3 / MinIO<br/>артефакты данных<br/>+ логи операций")]
+        end
     end
-
-    subgraph OrchSvc["Orchestrator"]
-        ORCH["Orchestrator / Runtime<br/>• топологическая сортировка<br/>• параллельный запуск операций<br/>• создание K8s Job, watch<br/>• сбор логов Pod'ов"]
-    end
-
-    subgraph Data["Хранилища"]
-        PG[("PostgreSQL<br/>графы, runs, статусы,<br/>метаданные логов")]
-        S3[("S3 / MinIO<br/>артефакты данных<br/>+ логи операций")]
-    end
-
-    subgraph K8s["Kubernetes (minikube)"]
-        JOB1["Job → Pod<br/>операция A"]
-        JOB2["Job → Pod<br/>операция B"]
-        JOBN["Job → Pod<br/>операция N"]
-    end
-
-    UI -- "REST (CRUD)" --> API
-    UI <-. "WebSocket / SSE<br/>(статусы)" .-> API
-    API -- "internal REST:<br/>start / cancel / re-run" --> ORCH
-    API --> PG
-    API <-. "статусы: LISTEN/NOTIFY<br/>или polling" .-> PG
-    ORCH --> PG
-    ORCH -- "создание Job / watch" --> K8s
-    ORCH -. "чтение логов (K8s API)" .-> K8s
-    ORCH -- "запись лога по завершении" --> S3
-    API -- "логи (после завершения)" --> S3
-    JOB1 -- "артефакты" --> S3
-    JOB2 -- "артефакты" --> S3
-    JOBN -- "артефакты" --> S3
+    
+    Client --> UI
+    UI -- "REST<br/>(CRUD)" --> API
+    UI <-. "WebSocket<br/>(статусы)" .-> API
+    API -- "REST<br/>(start / cancel / restart)" --> Sched
+    API -- "получение путей файлов" --> PG
+    API <-. "мониторинг статусов job" .-> PG
+    API -- "получение логов и артефактов" --> S3
+    Sched -- "готовый workflow" --> Oper
+    Oper -- запись путей файлов --> PG
+    Oper -- "создание" --> Jobs
+    Oper -- "сбор логов" --> Jobs
+    Oper -- "сохранение логов и артефактов" --> S3
 ```
 
 ## Структура репозитория
@@ -150,8 +149,9 @@ sequenceDiagram
     participant UI as Frontend
     participant API as API Server
     participant DB as PostgreSQL
-    participant ORCH as Orchestrator
-    participant K8s as Kubernetes
+    participant Sched as Scheduler
+    participant ARGO as Argo Workflows
+    participant K8s as Kubernetes (Jobs)
     participant S3 as MinIO
 
     UI->>API: POST /pipelines (граф)
@@ -160,33 +160,36 @@ sequenceDiagram
 
     UI->>API: POST /runs (запуск)
     API->>DB: создать run (Pending)
-    API->>ORCH: internal REST: start run
+    API->>Sched: REST: start run
 
-    ORCH->>DB: загрузить граф
-    ORCH->>ORCH: топологическая сортировка
-    ORCH->>DB: операции → Scheduled
-    ORCH->>K8s: создать Job'ы (готовые операции, параллельно)
-    ORCH->>DB: операции → Running
+    Sched->>DB: загрузить граф
+    Sched->>Sched: сформировать Argo Workflow (DAG-шаблон)
+    Sched->>DB: операции → Scheduled
+    Sched->>ARGO: отправить готовый workflow
+
+    ARGO->>ARGO: топологическая сортировка
+    ARGO->>K8s: создать Job'ы (готовые операции, параллельно)
+    ARGO->>DB: операции → Running
 
     loop пока есть незавершённые операции
-        K8s-->>ORCH: статус Job (watch)
+        K8s-->>ARGO: статус Job (watch)
         alt успех
-            ORCH->>DB: операция → Succeeded
-            ORCH->>K8s: забрать полный лог пода
-            ORCH->>S3: записать logs/attempt-{N}.log
-            ORCH->>DB: manifest артефактов + ссылка на лог
-            ORCH->>K8s: создать Job'ы следующих операций
+            ARGO->>DB: операция → Succeeded
+            ARGO->>K8s: забрать полный лог пода
+            ARGO->>S3: записать logs/attempt-{N}.log
+            ARGO->>DB: manifest артефактов + ссылка на лог
+            ARGO->>K8s: создать Job'ы следующих операций
         else ошибка (exit code ≠ 0)
-            ORCH->>K8s: забрать полный лог пода
-            ORCH->>S3: записать logs/attempt-{N}.log
-            ORCH->>DB: операция → Failed (exit code, ссылка на лог)
-            ORCH->>DB: незапущенные операции → Cancelled
-            ORCH->>DB: run → Failed
+            ARGO->>K8s: забрать полный лог пода
+            ARGO->>S3: записать logs/attempt-{N}.log
+            ARGO->>DB: операция → Failed (exit code, ссылка на лог)
+            ARGO->>DB: незапущенные операции → Cancelled
+            ARGO->>DB: run → Failed
             API-->>UI: уведомление: операция упала, граф остановлен
         end
     end
 
-    ORCH->>DB: run → Succeeded | Failed
+    ARGO->>DB: run → Succeeded | Failed
 
     loop статусы → UI
         DB-->>API: обновления (LISTEN/NOTIFY / polling)
@@ -204,11 +207,11 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> Pending: run создан
-    Pending --> Scheduled: план построен
-    Scheduled --> Running: K8s Job создан
+    Pending --> Scheduled: Scheduler сформировал workflow
+    Scheduled --> Running: Argo создал K8s Job
     Running --> Succeeded: exit code = 0
     Running --> Failed: exit code ≠ 0
-    Running --> Cancelled: отмеfна run
+    Running --> Cancelled: отмена run
     Failed --> Scheduled: ручной re-run (новая попытка)
     Succeeded --> [*]
     Failed --> [*]
@@ -222,7 +225,7 @@ stateDiagram-v2
 - **Автоматических retry нет.** Ошибка пользовательского кода (exit code ≠ 0) → операция сразу `Failed`, исполнение графа останавливается.
 - При этом незапущенные операции графа переводятся в `Cancelled`, run — в `Failed`; пользователь получает статус (WebSocket/SSE) и логи упавшей операции — этого достаточно, чтобы понять причину.
 - **Единственный способ повторить — ручной re-run** узла (после исправления): операция возвращается в `Scheduled`, начинается новая попытка.
-- Инфраструктурные сбои платформы (рестарт API/Orchestrator) статусов не меняют — состояние восстанавливается из БД (reconcile).
+- Инфраструктурные сбои платформы (рестарт API/Scheduler) статусов не меняют — состояние восстанавливается из БД (reconcile). Состояние самих workflow живёт в Argo (etcd) и также восстанавливается reconcile-циклом Argo.
 - K8s Job создаётся с `backoffLimit: 0` и `restartPolicy: Never` — один под на попытку, чтобы Kubernetes не делал скрытых ретраитов за нашей спиной.
 
 ## License
