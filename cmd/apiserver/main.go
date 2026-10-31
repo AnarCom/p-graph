@@ -9,6 +9,8 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/AnarCom/p-graph/internal/api"
+	pipelineHandler "github.com/AnarCom/p-graph/internal/api/handler/pipeline"
 	"github.com/AnarCom/p-graph/internal/migrator"
 	"github.com/AnarCom/p-graph/migrations"
 )
@@ -55,11 +57,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	stubHandler, err := pipelineHandler.NewStubHandler()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	handler := api.NewMux(stubHandler)
 
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
@@ -68,7 +71,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: handler,
 	}
 
 	log.Printf("apiserver listening on %s", addr)
