@@ -8,6 +8,9 @@ using TypeSpec.Http;
 @service(#{
   title: "p-graph API",
 })
+@server(
+  "http://apiserver.local"
+)
 namespace PGraph {
   model HealthResponse {
     status: string;

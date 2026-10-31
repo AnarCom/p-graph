@@ -7,12 +7,15 @@ import (
 	"github.com/gorilla/mux"
 
 	genapi "github.com/AnarCom/p-graph/internal/api/gen"
+	"github.com/AnarCom/p-graph/internal/middleware"
 )
 
 func NewMux(h genapi.StrictServerInterface) http.Handler {
 	router := mux.NewRouter()
 	router.Use(pathVarsToPathValue)
-	return genapi.HandlerFromMux(genapi.NewStrictHandler(h, nil), &gorillaServeMux{router: router})
+	handler := genapi.HandlerFromMux(genapi.NewStrictHandler(h, nil), &gorillaServeMux{router: router})
+
+	return middleware.Apply(handler, middleware.CORS)
 }
 
 type gorillaServeMux struct {

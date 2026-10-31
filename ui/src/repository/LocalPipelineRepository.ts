@@ -3,6 +3,7 @@ import { validateDefinition } from '../editor/validation';
 import { mockNodeCatalog } from '../mocks/nodeCatalog';
 import { sampleDraft } from '../mocks/sampleDraft';
 import type { PipelineRepository } from './PipelineRepository';
+import {HttpPipelineRepository} from "./HttpPipelineRepository";
 
 const storageKey = (pipelineId: string) =>
   `p-graph:mock-draft:${pipelineId}:v1`;
@@ -47,5 +48,4 @@ export class LocalPipelineRepository implements PipelineRepository {
   }
 }
 
-export const localPipelineRepository = new LocalPipelineRepository();
-
+export const localPipelineRepository = new HttpPipelineRepository();

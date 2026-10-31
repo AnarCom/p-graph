@@ -120,6 +120,10 @@ curl http://argo.local
 # 8. Чтобы запустить workflow
 создать argo-bucket
 в argo интерфейсе запустить workflow
+
+# 9. Для доступа к apiserver
+echo "127.0.0.1 apiserver.local" | sudo tee -a /etc/hosts > /dev/null
+curl http://apiserver.local/health
 ```
 
 ## Генерация API-контракта (TypeSpec → OpenAPI → Go)

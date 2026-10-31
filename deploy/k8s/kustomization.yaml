@@ -6,6 +6,7 @@ resources:
   - namespace.yaml
   - apiserver/configmap.yaml
   - apiserver/deployment.yaml
+  - apiserver/ingress.yaml
   - apiserver/service.yaml
   - argo/base.yaml
   - argo/configmap.yaml
