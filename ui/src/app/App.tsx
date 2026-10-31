@@ -36,7 +36,7 @@ import { serializeDefinition, toBackendJson } from '../editor/serialization';
 import { useEditorStore } from '../editor/store';
 import { localPipelineRepository } from '../repository/LocalPipelineRepository';
 
-const pipelineId = 'pipeline-print-file';
+const pipelineId = '20000000-0000-4000-8000-000000000000';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 

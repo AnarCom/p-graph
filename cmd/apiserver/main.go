@@ -12,6 +12,8 @@ import (
 	"github.com/AnarCom/p-graph/internal/api"
 	pipelineHandler "github.com/AnarCom/p-graph/internal/api/handler/pipeline"
 	"github.com/AnarCom/p-graph/internal/migrator"
+	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
+	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 	"github.com/AnarCom/p-graph/migrations"
 )
 
@@ -57,12 +59,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stubHandler, err := pipelineHandler.NewStubHandler()
-	if err != nil {
-		log.Fatal(err)
-	}
+	store := pipelineStorage.NewPostgresStorage(db)
+	pipelines := pipelineSvc.NewService(store)
 
-	handler := api.NewMux(stubHandler)
+	handler := api.NewMux(pipelineHandler.NewPipelineHandler(pipelines))
 
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {

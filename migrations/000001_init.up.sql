@@ -45,7 +45,6 @@ CREATE TABLE catalog_versions (
     version     TEXT        PRIMARY KEY,
     released_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO catalog_versions (version) VALUES ('0.1');
 
 CREATE TABLE node_types (
     type          TEXT        NOT NULL,
@@ -62,54 +61,6 @@ CREATE TABLE node_types (
 
     PRIMARY KEY (type, version)
 );
-INSERT INTO node_types (type, version, title, description, category, status, inputs, outputs, config_schema) VALUES
-(
-    'builtin.file-input', 1,
-    'Загруженный файл', 'Получить файловый артефакт из входов запуска', 'files', 'active',
-    '[]'::jsonb,
-    '[{"name": "file", "title": "Файл", "dataType": "artifact.file"}]'::jsonb,
-    '{
-        "type": "object",
-        "properties": {
-            "inputName": {"type": "string", "title": "Имя входа"}
-        },
-        "required": ["inputName"],
-        "additionalProperties": false
-    }'::jsonb
-),
-(
-    'builtin.read-file', 1,
-    'Прочитать файл', 'Прочитать файловый артефакт и вернуть содержимое как строку', 'files', 'active',
-    '[{"name": "file", "title": "Файл", "dataType": "artifact.file", "minConnections": 1, "maxConnections": 1}]'::jsonb,
-    '[{"name": "text", "title": "Текст", "dataType": "text"}]'::jsonb,
-    '{
-        "type": "object",
-        "properties": {
-            "encoding": {"type": "string", "title": "Кодировка", "default": "utf-8", "enum": ["utf-8"]}
-        },
-        "additionalProperties": false
-    }'::jsonb
-),
-(
-    'builtin.console-print', 1,
-    'Вывести в консоль', 'Записать строку в журнал запуска', 'text', 'active',
-    '[{"name": "text", "title": "Текст", "dataType": "text", "minConnections": 1, "maxConnections": 1}]'::jsonb,
-    '[{"name": "done", "title": "Завершено", "dataType": "control"}]'::jsonb,
-    '{
-        "type": "object",
-        "properties": {
-            "prefix": {"type": "string", "title": "Префикс", "default": ""}
-        },
-        "additionalProperties": false
-    }'::jsonb
-),
-(
-    'builtin.end', 1,
-    'Конец', 'Явно обозначить успешное завершение пайплайна', 'flow', 'active',
-    '[{"name": "in", "title": "Вход", "dataType": "any", "minConnections": 1, "maxConnections": 1}]'::jsonb,
-    '[]'::jsonb,
-    '{"type": "object", "properties": {}, "additionalProperties": false}'::jsonb
-);
 
 CREATE TABLE catalog_version_types (
     catalog_version   TEXT    NOT NULL REFERENCES catalog_versions (version) ON DELETE CASCADE,
@@ -119,11 +70,6 @@ CREATE TABLE catalog_version_types (
     PRIMARY KEY (catalog_version, node_type, node_type_version),
     FOREIGN KEY (node_type, node_type_version) REFERENCES node_types (type, version)
 );
-INSERT INTO catalog_version_types (catalog_version, node_type, node_type_version) VALUES
-    ('0.1', 'builtin.file-input', 1),
-    ('0.1', 'builtin.read-file', 1),
-    ('0.1', 'builtin.console-print', 1),
-    ('0.1', 'builtin.end', 1);
 
 CREATE TABLE artifacts (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -6,7 +6,7 @@ import (
 
 	genapi "github.com/AnarCom/p-graph/internal/api/gen"
 	"github.com/AnarCom/p-graph/internal/model"
-	"github.com/AnarCom/p-graph/internal/usecase"
+	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
 )
 
 type PipelineService interface {
@@ -32,7 +32,7 @@ func (h *PipelineHandler) Health(_ context.Context, _ genapi.HealthRequestObject
 func (h *PipelineHandler) GetNodeCatalog(ctx context.Context, req genapi.GetNodeCatalogRequestObject) (genapi.GetNodeCatalogResponseObject, error) {
 	catalog, err := h.pipelineSvc.GetNodeCatalog(ctx, req.Params.Version)
 	switch {
-	case errors.Is(err, usecase.ErrNodeCatalogNotFound):
+	case errors.Is(err, pipelineSvc.ErrNodeCatalogNotFound):
 		return genapi.GetNodeCatalog404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
@@ -48,7 +48,7 @@ func (h *PipelineHandler) GetNodeCatalog(ctx context.Context, req genapi.GetNode
 func (h *PipelineHandler) GetDraft(ctx context.Context, req genapi.GetDraftRequestObject) (genapi.GetDraftResponseObject, error) {
 	draft, err := h.pipelineSvc.GetDraft(ctx, req.PipelineId)
 	switch {
-	case errors.Is(err, usecase.ErrPipelineNotFound):
+	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
 		return genapi.GetDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
@@ -73,9 +73,9 @@ func (h *PipelineHandler) SaveDraft(ctx context.Context, req genapi.SaveDraftReq
 
 	err = h.pipelineSvc.SaveDraft(ctx, req.PipelineId, draft)
 	switch {
-	case errors.Is(err, usecase.ErrPipelineNotFound):
+	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
 		return genapi.SaveDraft404JSONResponse{Message: err.Error()}, nil
-	case errors.Is(err, usecase.ErrDraftConflict):
+	case errors.Is(err, pipelineSvc.ErrDraftConflict):
 		return genapi.SaveDraft409JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
@@ -87,7 +87,7 @@ func (h *PipelineHandler) SaveDraft(ctx context.Context, req genapi.SaveDraftReq
 func (h *PipelineHandler) ResetDraft(ctx context.Context, req genapi.ResetDraftRequestObject) (genapi.ResetDraftResponseObject, error) {
 	draft, err := h.pipelineSvc.ResetDraft(ctx, req.PipelineId)
 	switch {
-	case errors.Is(err, usecase.ErrPipelineNotFound):
+	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
 		return genapi.ResetDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
@@ -112,7 +112,7 @@ func (h *PipelineHandler) ValidateDraft(ctx context.Context, req genapi.Validate
 
 	result, err := h.pipelineSvc.ValidateDraft(ctx, req.PipelineId, definition)
 	switch {
-	case errors.Is(err, usecase.ErrPipelineNotFound):
+	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
 		return genapi.ValidateDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err

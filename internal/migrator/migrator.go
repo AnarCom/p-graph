@@ -38,9 +38,8 @@ func (m *Migrator) ApplyMigrations(db *sql.DB) (err error) {
 	}
 
 	defer func() {
-		srcErr, dbErr := migrator.Close()
-		if srcErr != nil || dbErr != nil {
-			err = fmt.Errorf("close migrations: %w", errors.Join(srcErr, dbErr))
+		if srcErr := m.srcDriver.Close(); srcErr != nil {
+			err = fmt.Errorf("close migrations source: %w", srcErr)
 		}
 	}()
 
