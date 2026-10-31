@@ -1,17 +1,19 @@
 import "@typespec/http";
 import "@typespec/openapi3";
 
+import "./operations/pipeline.tsp";
+
 using TypeSpec.Http;
 
 @service(#{
   title: "p-graph API",
 })
-namespace PGraph;
+namespace PGraph {
+  model HealthResponse {
+    status: string;
+  }
 
-model HealthResponse {
-  status: string;
+  @route("/health")
+  @get
+  op health(): HealthResponse;
 }
-
-@route("/health")
-@get
-op health(): HealthResponse;

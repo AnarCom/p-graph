@@ -14,10 +14,10 @@
 ```mermaid
 flowchart LR
     Client["Client"]
+
+    UI["Frontend"]
     
     subgraph K8s["Kubernetes"]
-        UI["Frontend"]
-    
         API["API Server<br/>• CRUD pipelines<br/>• валидация DAG (при сохранении)<br/>"]
         
         Sched["Scheduler<br/>• Распределение подов на ноды<br/>• Формирование workflows"]
