@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	_ "github.com/lib/pq"
 
 	"github.com/AnarCom/p-graph/internal/api"
 	pipelineHandler "github.com/AnarCom/p-graph/internal/api/handler/pipeline"
+	"github.com/AnarCom/p-graph/internal/config"
 	"github.com/AnarCom/p-graph/internal/migrator"
 	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 	"github.com/AnarCom/p-graph/migrations"
 )
 
-func connectDB() (*sql.DB, error) {
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+func connectDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -44,7 +44,12 @@ func migrateDB(db *sql.DB) error {
 }
 
 func main() {
-	db, err := connectDB()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db, err := connectDB(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,10 +69,7 @@ func main() {
 
 	handler := api.NewMux(pipelineHandler.NewPipelineHandler(pipelines))
 
-	addr := os.Getenv("LISTEN_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
+	addr := cfg.ListenAddr
 
 	srv := &http.Server{
 		Addr:    addr,

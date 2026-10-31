@@ -2,9 +2,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: pgraph
 
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: apiserver-file-config
+    files:
+      - apiserver.yaml=configs/apiserver.yaml
+
 resources:
   - namespace.yaml
-  - apiserver/configmap.yaml
   - apiserver/deployment.yaml
   - apiserver/ingress.yaml
   - apiserver/service.yaml

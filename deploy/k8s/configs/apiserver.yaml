@@ -1,0 +1,2 @@
+listen_addr: ":8080"
+database_url: postgres://pgraph:pgraph-dev-password@postgres.pgraph.svc:5432/pgraph?sslmode=disable

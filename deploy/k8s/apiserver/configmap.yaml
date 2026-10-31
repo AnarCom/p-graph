@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: apiserver-config
-  namespace: pgraph
-data:
-  DATABASE_URL: postgres://pgraph:pgraph-dev-password@postgres.pgraph.svc:5432/pgraph?sslmode=disable

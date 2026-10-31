@@ -17,8 +17,16 @@ spec:
         - image: pgraph-apiserver:v1
           imagePullPolicy: IfNotPresent
           name: apiserver
-          envFrom:
-            - configMapRef:
-                name: apiserver-config
+          env:
+            - name: CONFIG_PATH
+              value: /etc/apiserver/apiserver.yaml
           ports:
             - containerPort: 8080
+          volumeMounts:
+            - name: apiserver-config
+              mountPath: /etc/apiserver
+              readOnly: true
+      volumes:
+        - name: apiserver-config
+          configMap:
+            name: apiserver-file-config
