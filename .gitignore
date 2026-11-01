@@ -5,6 +5,7 @@
 # Go
 /bin/
 **/*.gen.go
+/coverage
 
 # Frontend
 ui/node_modules/
