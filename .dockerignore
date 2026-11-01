@@ -1,0 +1,11 @@
+.git
+.idea
+ui
+typespec
+docs
+coverage
+minio-data
+deploy
+Makefile
+README.md
+LICENSE

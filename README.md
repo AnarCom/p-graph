@@ -95,7 +95,7 @@ minikube start --driver=docker
 minikube addons enable ingress
 
 # 2. Собрать образ apiserver и загрузить его в minikube
-docker build -f deploy/docker/apiserver/Dockerfile -t pgraph-apiserver:v1 .
+docker build -f deploy/docker/go/Dockerfile --build-arg SERVICE=apiserver -t pgraph-apiserver:v1 .
 minikube image load pgraph-apiserver:v1
 
 # 3. Применить все манифесты (namespace pgraph)
