@@ -2,32 +2,39 @@ package pipelineStorage
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/AnarCom/p-graph/internal/model"
+	"github.com/AnarCom/p-graph/internal/storage"
 )
 
 type PostgresStorage struct {
-	db *sql.DB
+	db storage.Conn
 }
 
-func NewPostgresStorage(db *sql.DB) *PostgresStorage {
+func NewPostgresStorage(db storage.Conn) *PostgresStorage {
 	return &PostgresStorage{db: db}
 }
 
 func (s *PostgresStorage) GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error) {
-	resolved, err := s.resolveCatalogVersion(ctx, version)
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
 		return model.NodeCatalog{}, err
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	resolved, err := resolveCatalogVersion(ctx, conn, version)
+	if err != nil {
+		return model.NodeCatalog{}, err
+	}
+
+	rows, err := conn.Query(ctx, `
 		SELECT t.type, t.version, t.title, t.description, t.category, t.status, t.inputs, t.outputs, t.config_schema
 		FROM node_types t
 		JOIN catalog_version_types cvt
@@ -62,10 +69,10 @@ func (s *PostgresStorage) GetNodeCatalog(ctx context.Context, version *string) (
 	return model.NodeCatalog{CatalogVersion: resolved, NodeTypes: nodeTypes}, nil
 }
 
-func (s *PostgresStorage) resolveCatalogVersion(ctx context.Context, version *string) (string, error) {
+func resolveCatalogVersion(ctx context.Context, conn storage.Conn, version *string) (string, error) {
 	if version != nil {
 		var exists bool
-		err := s.db.QueryRowContext(ctx,
+		err := conn.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM catalog_versions WHERE version = $1)`,
 			*version,
 		).Scan(&exists)
@@ -79,10 +86,10 @@ func (s *PostgresStorage) resolveCatalogVersion(ctx context.Context, version *st
 	}
 
 	var latest string
-	err := s.db.QueryRowContext(ctx,
+	err := conn.QueryRow(ctx,
 		`SELECT version FROM catalog_versions ORDER BY released_at DESC LIMIT 1`,
 	).Scan(&latest)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNodeCatalogNotFound
 	}
 	if err != nil {
@@ -91,23 +98,23 @@ func (s *PostgresStorage) resolveCatalogVersion(ctx context.Context, version *st
 	return latest, nil
 }
 
-func (s *PostgresStorage) GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, bool, error) {
-	pipelineUUID, err := parsePipelineID(pipelineID)
+func (s *PostgresStorage) GetDraft(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error) {
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
 		return model.PipelineDraft{}, false, err
 	}
 
 	var (
-		baseRevision   sql.NullInt64
+		baseRevision   pgtype.Int8
 		definitionJSON []byte
 	)
-	err = s.db.QueryRowContext(ctx, `
+	err = conn.QueryRow(ctx, `
 		SELECT d.base_revision, d.definition
 		FROM pipelines p
 		LEFT JOIN pipeline_drafts d ON d.pipeline_id = p.id
 		WHERE p.id = $1
-	`, pipelineUUID).Scan(&baseRevision, &definitionJSON)
-	if errors.Is(err, sql.ErrNoRows) {
+	`, pipelineID).Scan(&baseRevision, &definitionJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return model.PipelineDraft{}, false, ErrPipelineNotFound
 	}
 	if err != nil {
@@ -117,15 +124,15 @@ func (s *PostgresStorage) GetDraft(ctx context.Context, pipelineID string) (mode
 		return model.PipelineDraft{}, false, nil
 	}
 
-	draft, err := draftFromJSON(pipelineID, nullInt64Ptr(baseRevision), definitionJSON)
+	draft, err := draftFromJSON(pipelineID.String(), nullInt64Ptr(baseRevision), definitionJSON)
 	if err != nil {
 		return model.PipelineDraft{}, false, err
 	}
 	return draft, true, nil
 }
 
-func (s *PostgresStorage) GetLatestRevision(ctx context.Context, pipelineID string) (model.PipelineDraft, bool, error) {
-	pipelineUUID, err := parsePipelineID(pipelineID)
+func (s *PostgresStorage) GetLatestRevision(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error) {
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
 		return model.PipelineDraft{}, false, err
 	}
@@ -134,29 +141,29 @@ func (s *PostgresStorage) GetLatestRevision(ctx context.Context, pipelineID stri
 		revision       int64
 		definitionJSON []byte
 	)
-	err = s.db.QueryRowContext(ctx, `
+	err = conn.QueryRow(ctx, `
 		SELECT revision, definition
 		FROM pipeline_revisions
 		WHERE pipeline_id = $1
 		ORDER BY revision DESC
 		LIMIT 1
-	`, pipelineUUID).Scan(&revision, &definitionJSON)
-	if errors.Is(err, sql.ErrNoRows) {
+	`, pipelineID).Scan(&revision, &definitionJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return model.PipelineDraft{}, false, nil
 	}
 	if err != nil {
 		return model.PipelineDraft{}, false, fmt.Errorf("get latest revision: %w", err)
 	}
 
-	draft, err := draftFromJSON(pipelineID, &revision, definitionJSON)
+	draft, err := draftFromJSON(pipelineID.String(), &revision, definitionJSON)
 	if err != nil {
 		return model.PipelineDraft{}, false, err
 	}
 	return draft, true, nil
 }
 
-func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error {
-	pipelineUUID, err := parsePipelineID(pipelineID)
+func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) error {
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
 		return err
 	}
@@ -171,14 +178,14 @@ func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID string, dr
 		baseRevision = *draft.BaseRevision
 	}
 
-	_, err = s.db.ExecContext(ctx, `
+	_, err = conn.Exec(ctx, `
 		INSERT INTO pipeline_drafts (pipeline_id, base_revision, definition, updated_at)
 		VALUES ($1, $2, $3, now())
 		ON CONFLICT (pipeline_id) DO UPDATE
 		SET base_revision = EXCLUDED.base_revision,
 		    definition = EXCLUDED.definition,
 		    updated_at = now()
-	`, pipelineUUID, baseRevision, definitionJSON)
+	`, pipelineID, baseRevision, definitionJSON)
 	if isForeignKeyViolation(err) {
 		return ErrPipelineNotFound
 	}
@@ -188,46 +195,38 @@ func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID string, dr
 	return nil
 }
 
-func (s *PostgresStorage) DeleteDraft(ctx context.Context, pipelineID string) error {
-	pipelineUUID, err := parsePipelineID(pipelineID)
+func (s *PostgresStorage) DeleteDraft(ctx context.Context, pipelineID uuid.UUID) error {
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
 		return err
 	}
 
-	if _, err := s.db.ExecContext(ctx,
+	if _, err := conn.Exec(ctx,
 		`DELETE FROM pipeline_drafts WHERE pipeline_id = $1`,
-		pipelineUUID,
+		pipelineID,
 	); err != nil {
 		return fmt.Errorf("delete pipeline draft: %w", err)
 	}
 	return nil
 }
 
-func (s *PostgresStorage) PipelineExists(ctx context.Context, pipelineID string) (bool, error) {
-	pipelineUUID, err := parsePipelineID(pipelineID)
+func (s *PostgresStorage) PipelineExists(ctx context.Context, pipelineID uuid.UUID) (bool, error) {
+	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
 	var exists bool
-	if err := s.db.QueryRowContext(ctx,
+	if err := conn.QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM pipelines WHERE id = $1)`,
-		pipelineUUID,
+		pipelineID,
 	).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check pipeline: %w", err)
 	}
 	return exists, nil
 }
 
-func parsePipelineID(pipelineID string) (uuid.UUID, error) {
-	id, err := uuid.Parse(pipelineID)
-	if err != nil {
-		return uuid.UUID{}, ErrPipelineNotFound
-	}
-	return id, nil
-}
-
-func nullInt64Ptr(v sql.NullInt64) *int64 {
+func nullInt64Ptr(v pgtype.Int8) *int64 {
 	if !v.Valid {
 		return nil
 	}
@@ -235,6 +234,6 @@ func nullInt64Ptr(v sql.NullInt64) *int64 {
 }
 
 func isForeignKeyViolation(err error) bool {
-	var pqErr *pq.Error
-	return errors.As(err, &pqErr) && pqErr.Code == pq.ErrorCode("23503")
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }

@@ -4,95 +4,166 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
+
 	"github.com/AnarCom/p-graph/internal/model"
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 )
 
 type Store interface {
 	GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error)
-	GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, bool, error)
-	GetLatestRevision(ctx context.Context, pipelineID string) (model.PipelineDraft, bool, error)
-	UpsertDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error
-	DeleteDraft(ctx context.Context, pipelineID string) error
-	PipelineExists(ctx context.Context, pipelineID string) (bool, error)
+	GetDraft(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
+	GetLatestRevision(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
+	UpsertDraft(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) error
+	DeleteDraft(ctx context.Context, pipelineID uuid.UUID) error
+	PipelineExists(ctx context.Context, pipelineID uuid.UUID) (bool, error)
+}
+
+type Transactor interface {
+	Do(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 type Service struct {
 	store Store
+	tx    Transactor
 }
 
-func NewService(store Store) *Service {
-	return &Service{store: store}
+func NewService(store Store, tx Transactor) *Service {
+	return &Service{store: store, tx: tx}
 }
 
 func (s *Service) GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error) {
-	catalog, err := s.store.GetNodeCatalog(ctx, version)
+	var catalog model.NodeCatalog
+
+	err := s.tx.Do(ctx, func(ctx context.Context) error {
+		var err error
+		catalog, err = s.store.GetNodeCatalog(ctx, version)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		return nil
+	})
 	if err != nil {
-		return model.NodeCatalog{}, fromStoreError(err)
+		return model.NodeCatalog{}, err
 	}
+
 	return catalog, nil
 }
 
 func (s *Service) GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
-	draft, ok, err := s.store.GetDraft(ctx, pipelineID)
+	id, err := parsePipelineID(pipelineID)
 	if err != nil {
-		return model.PipelineDraft{}, fromStoreError(err)
-	}
-	if ok {
-		return draft, nil
+		return model.PipelineDraft{}, err
 	}
 
-	latest, ok, err := s.store.GetLatestRevision(ctx, pipelineID)
+	var draft model.PipelineDraft
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		current, ok, err := s.store.GetDraft(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if ok {
+			draft = current
+			return nil
+		}
+
+		latest, ok, err := s.store.GetLatestRevision(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if ok {
+			draft = latest
+			return nil
+		}
+
+		return ErrPipelineNotFound
+	})
 	if err != nil {
-		return model.PipelineDraft{}, fromStoreError(err)
-	}
-	if ok {
-		return latest, nil
+		return model.PipelineDraft{}, err
 	}
 
-	return model.PipelineDraft{}, ErrPipelineNotFound
+	return draft, nil
 }
 
 func (s *Service) SaveDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error {
-	current, ok, err := s.store.GetDraft(ctx, pipelineID)
+	id, err := parsePipelineID(pipelineID)
 	if err != nil {
-		return fromStoreError(err)
-	}
-	if ok && draft.BaseRevision != nil && !sameBaseRevision(current.BaseRevision, draft.BaseRevision) {
-		return ErrDraftConflict
+		return err
 	}
 
-	if err := s.store.UpsertDraft(ctx, pipelineID, draft); err != nil {
-		return fromStoreError(err)
-	}
-	return nil
+	return s.tx.Do(ctx, func(ctx context.Context) error {
+		current, ok, err := s.store.GetDraft(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if ok && draft.BaseRevision != nil && !sameBaseRevision(current.BaseRevision, draft.BaseRevision) {
+			return ErrDraftConflict
+		}
+
+		if err := s.store.UpsertDraft(ctx, id, draft); err != nil {
+			return fromStoreError(err)
+		}
+		return nil
+	})
 }
 
 func (s *Service) ResetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
-	latest, ok, err := s.store.GetLatestRevision(ctx, pipelineID)
+	id, err := parsePipelineID(pipelineID)
 	if err != nil {
-		return model.PipelineDraft{}, fromStoreError(err)
-	}
-	if !ok {
-		return model.PipelineDraft{}, ErrPipelineNotFound
+		return model.PipelineDraft{}, err
 	}
 
-	if err := s.store.DeleteDraft(ctx, pipelineID); err != nil {
-		return model.PipelineDraft{}, fromStoreError(err)
+	var latest model.PipelineDraft
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		var ok bool
+		var err error
+		latest, ok, err = s.store.GetLatestRevision(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if !ok {
+			return ErrPipelineNotFound
+		}
+
+		if err := s.store.DeleteDraft(ctx, id); err != nil {
+			return fromStoreError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return model.PipelineDraft{}, err
 	}
+
 	return latest, nil
 }
 
 func (s *Service) ValidateDraft(ctx context.Context, pipelineID string, _ model.PipelineDefinition) (model.ValidationResult, error) {
-	exists, err := s.store.PipelineExists(ctx, pipelineID)
+	id, err := parsePipelineID(pipelineID)
 	if err != nil {
-		return model.ValidationResult{}, fromStoreError(err)
-	}
-	if !exists {
-		return model.ValidationResult{}, ErrPipelineNotFound
+		return model.ValidationResult{}, err
 	}
 
-	return model.ValidationResult{Valid: true}, nil
+	var result model.ValidationResult
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		exists, err := s.store.PipelineExists(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if !exists {
+			return ErrPipelineNotFound
+		}
+
+		result = model.ValidationResult{Valid: true}
+		return nil
+	})
+	if err != nil {
+		return model.ValidationResult{}, err
+	}
+
+	return result, nil
 }
 
 func fromStoreError(err error) error {
@@ -108,4 +179,12 @@ func fromStoreError(err error) error {
 
 func sameBaseRevision(current, incoming *int64) bool {
 	return current != nil && *current == *incoming
+}
+
+func parsePipelineID(pipelineID string) (uuid.UUID, error) {
+	id, err := uuid.Parse(pipelineID)
+	if err != nil {
+		return uuid.UUID{}, ErrPipelineNotFound
+	}
+	return id, nil
 }

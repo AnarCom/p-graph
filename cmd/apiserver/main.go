@@ -1,42 +1,45 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/AnarCom/p-graph/internal/api"
 	pipelineHandler "github.com/AnarCom/p-graph/internal/api/handler/pipeline"
 	"github.com/AnarCom/p-graph/internal/config"
 	"github.com/AnarCom/p-graph/internal/migrator"
 	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
+	"github.com/AnarCom/p-graph/internal/storage"
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 	"github.com/AnarCom/p-graph/migrations"
 )
 
-func connectDB(dsn string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", dsn)
+func connectDB(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("create pool: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	return db, nil
+	return pool, nil
 }
 
-func migrateDB(db *sql.DB) error {
+func migrateDB(pool *pgxpool.Pool) error {
 	m, err := migrator.NewMigrator(migrations.FS, ".")
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
 
-	if err := m.ApplyMigrations(db); err != nil {
+	if err := m.ApplyMigrations(stdlib.OpenDBFromPool(pool)); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 
@@ -49,34 +52,30 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := connectDB(cfg.DatabaseURL)
+	ctx := context.Background()
+
+	pool, err := connectDB(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	defer pool.Close()
 
-	if err := migrateDB(db); err != nil {
+	if err := migrateDB(pool); err != nil {
 		log.Fatal(err)
 	}
 
-	store := pipelineStorage.NewPostgresStorage(db)
-	pipelines := pipelineSvc.NewService(store)
+	store := pipelineStorage.NewPostgresStorage(pool)
+	tx := storage.NewTransactor(pool)
+	pipelines := pipelineSvc.NewService(store, tx)
 
 	handler := api.NewMux(pipelineHandler.NewPipelineHandler(pipelines))
 
-	addr := cfg.ListenAddr
-
 	srv := &http.Server{
-		Addr:    addr,
+		Addr:    cfg.ListenAddr,
 		Handler: handler,
 	}
 
-	log.Printf("apiserver listening on %s", addr)
+	log.Printf("apiserver listening on %s", cfg.ListenAddr)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
