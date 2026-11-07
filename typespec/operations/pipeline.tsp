@@ -1,10 +1,13 @@
+import "@typespec/openapi";
+
 import "../models/node-catalog.tsp";
 import "../models/pipeline.tsp";
 import "../models/validation.tsp";
 
 using TypeSpec.Http;
+using TypeSpec.OpenAPI;
 
-namespace PGraph {
+namespace PGraph.Apiserver {
   @error
   model NodeCatalogNotFound {
     @statusCode code: 404;
@@ -23,21 +26,24 @@ namespace PGraph {
     message: string;
   }
 
-  // getNodeCatalog(version?: string)
+  @operationId("getNodeCatalog")
+  @tag("apiserver")
   @route("/node-catalog")
   @get
   op getNodeCatalog(
     @query version?: string;
   ): NodeCatalog | NodeCatalogNotFound;
 
-  // getDraft(pipelineId: string)
+  @operationId("getDraft")
+  @tag("apiserver")
   @route("/pipelines/{pipelineId}/draft")
   @get
   op getDraft(
     @path pipelineId: string;
   ): PipelineDraft | PipelineNotFound;
 
-  // saveDraft(draft: PipelineDraft)
+  @operationId("saveDraft")
+  @tag("apiserver")
   @route("/pipelines/{pipelineId}/draft")
   @put
   op saveDraft(
@@ -45,14 +51,16 @@ namespace PGraph {
     @body draft: PipelineDraft;
   ): void | PipelineNotFound | DraftConflict;
 
-  // resetDraft(pipelineId: string): PipelineDraft
+  @operationId("resetDraft")
+  @tag("apiserver")
   @route("/pipelines/{pipelineId}/draft")
   @delete
   op resetDraft(
     @path pipelineId: string;
   ): PipelineDraft | PipelineNotFound;
 
-  // validateDraft(draft: PipelineDraft): ValidationResult
+  @operationId("validateDraft")
+  @tag("apiserver")
   @route("/pipelines/{pipelineId}/validate")
   @post
   op validateDraft(

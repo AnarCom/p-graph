@@ -9,6 +9,9 @@ configMapGenerator:
   - name: apiserver-file-config
     files:
       - apiserver.yaml=configs/apiserver.yaml
+  - name: scheduler-file-config
+    files:
+      - scheduler.yaml=configs/scheduler.yaml
 
 resources:
   - namespace.yaml
@@ -27,6 +30,8 @@ resources:
   - postgres/secret.yaml
   - postgres/service.yaml
   - postgres/statefulset.yaml
+  - scheduler/deployment.yaml
+  - scheduler/service.yaml
 
 patchesJson6902:
   - target:

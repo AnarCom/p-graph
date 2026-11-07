@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	genapi "github.com/AnarCom/p-graph/internal/api/gen"
+	gen "github.com/AnarCom/p-graph/internal/api/gen/apiserver"
 	"github.com/AnarCom/p-graph/internal/model"
 	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
 )
@@ -25,15 +25,15 @@ func NewPipelineHandler(pipelines PipelineService) *PipelineHandler {
 	return &PipelineHandler{pipelineSvc: pipelines}
 }
 
-func (h *PipelineHandler) Health(_ context.Context, _ genapi.HealthRequestObject) (genapi.HealthResponseObject, error) {
-	return genapi.Health200JSONResponse{Status: "ok"}, nil
+func (h *PipelineHandler) Health(_ context.Context, _ gen.HealthRequestObject) (gen.HealthResponseObject, error) {
+	return gen.Health200JSONResponse{Status: "ok"}, nil
 }
 
-func (h *PipelineHandler) GetNodeCatalog(ctx context.Context, req genapi.GetNodeCatalogRequestObject) (genapi.GetNodeCatalogResponseObject, error) {
+func (h *PipelineHandler) GetNodeCatalog(ctx context.Context, req gen.GetNodeCatalogRequestObject) (gen.GetNodeCatalogResponseObject, error) {
 	catalog, err := h.pipelineSvc.GetNodeCatalog(ctx, req.Params.Version)
 	switch {
 	case errors.Is(err, pipelineSvc.ErrNodeCatalogNotFound):
-		return genapi.GetNodeCatalog404JSONResponse{Message: err.Error()}, nil
+		return gen.GetNodeCatalog404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -42,14 +42,14 @@ func (h *PipelineHandler) GetNodeCatalog(ctx context.Context, req genapi.GetNode
 	if err != nil {
 		return nil, err
 	}
-	return genapi.GetNodeCatalog200JSONResponse(out), nil
+	return gen.GetNodeCatalog200JSONResponse(out), nil
 }
 
-func (h *PipelineHandler) GetDraft(ctx context.Context, req genapi.GetDraftRequestObject) (genapi.GetDraftResponseObject, error) {
+func (h *PipelineHandler) GetDraft(ctx context.Context, req gen.GetDraftRequestObject) (gen.GetDraftResponseObject, error) {
 	draft, err := h.pipelineSvc.GetDraft(ctx, req.PipelineId)
 	switch {
 	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
-		return genapi.GetDraft404JSONResponse{Message: err.Error()}, nil
+		return gen.GetDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -58,10 +58,10 @@ func (h *PipelineHandler) GetDraft(ctx context.Context, req genapi.GetDraftReque
 	if err != nil {
 		return nil, err
 	}
-	return genapi.GetDraft200JSONResponse(out), nil
+	return gen.GetDraft200JSONResponse(out), nil
 }
 
-func (h *PipelineHandler) SaveDraft(ctx context.Context, req genapi.SaveDraftRequestObject) (genapi.SaveDraftResponseObject, error) {
+func (h *PipelineHandler) SaveDraft(ctx context.Context, req gen.SaveDraftRequestObject) (gen.SaveDraftResponseObject, error) {
 	if req.Body == nil {
 		return nil, errors.New("missing request body")
 	}
@@ -74,21 +74,21 @@ func (h *PipelineHandler) SaveDraft(ctx context.Context, req genapi.SaveDraftReq
 	err = h.pipelineSvc.SaveDraft(ctx, req.PipelineId, draft)
 	switch {
 	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
-		return genapi.SaveDraft404JSONResponse{Message: err.Error()}, nil
+		return gen.SaveDraft404JSONResponse{Message: err.Error()}, nil
 	case errors.Is(err, pipelineSvc.ErrDraftConflict):
-		return genapi.SaveDraft409JSONResponse{Message: err.Error()}, nil
+		return gen.SaveDraft409JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
 	}
 
-	return genapi.SaveDraft204Response{}, nil
+	return gen.SaveDraft204Response{}, nil
 }
 
-func (h *PipelineHandler) ResetDraft(ctx context.Context, req genapi.ResetDraftRequestObject) (genapi.ResetDraftResponseObject, error) {
+func (h *PipelineHandler) ResetDraft(ctx context.Context, req gen.ResetDraftRequestObject) (gen.ResetDraftResponseObject, error) {
 	draft, err := h.pipelineSvc.ResetDraft(ctx, req.PipelineId)
 	switch {
 	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
-		return genapi.ResetDraft404JSONResponse{Message: err.Error()}, nil
+		return gen.ResetDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -97,10 +97,10 @@ func (h *PipelineHandler) ResetDraft(ctx context.Context, req genapi.ResetDraftR
 	if err != nil {
 		return nil, err
 	}
-	return genapi.ResetDraft200JSONResponse(out), nil
+	return gen.ResetDraft200JSONResponse(out), nil
 }
 
-func (h *PipelineHandler) ValidateDraft(ctx context.Context, req genapi.ValidateDraftRequestObject) (genapi.ValidateDraftResponseObject, error) {
+func (h *PipelineHandler) ValidateDraft(ctx context.Context, req gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {
 	if req.Body == nil {
 		return nil, errors.New("missing request body")
 	}
@@ -113,12 +113,12 @@ func (h *PipelineHandler) ValidateDraft(ctx context.Context, req genapi.Validate
 	result, err := h.pipelineSvc.ValidateDraft(ctx, req.PipelineId, definition)
 	switch {
 	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
-		return genapi.ValidateDraft404JSONResponse{Message: err.Error()}, nil
+		return gen.ValidateDraft404JSONResponse{Message: err.Error()}, nil
 	case err != nil:
 		return nil, err
 	}
 
-	return genapi.ValidateDraft200JSONResponse(validationResultToGen(result)), nil
+	return gen.ValidateDraft200JSONResponse(validationResultToGen(result)), nil
 }
 
-var _ genapi.StrictServerInterface = (*PipelineHandler)(nil)
+var _ gen.StrictServerInterface = (*PipelineHandler)(nil)

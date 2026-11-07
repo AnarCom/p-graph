@@ -5,7 +5,8 @@ spec-gen:
 	npx --prefix ./typespec --no-install tsp compile ./typespec
 
 api-gen:
-	go tool oapi-codegen --config api/oapi-codegen.yaml api/openapi.yaml
+	go tool oapi-codegen --config api/oapi-codegen.yaml --include-tags apiserver -o internal/api/gen/apiserver/apiserver.gen.go api/openapi.yaml
+	go tool oapi-codegen --config api/oapi-codegen.yaml --include-tags scheduler -o internal/api/gen/scheduler/scheduler.gen.go api/openapi.yaml
 
 api: spec-gen api-gen
 

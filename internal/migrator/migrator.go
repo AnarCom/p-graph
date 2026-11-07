@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/AnarCom/p-graph/migrations"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 type Migrator struct {
@@ -26,7 +29,7 @@ func NewMigrator(sqlFiles embed.FS, dirName string) (*Migrator, error) {
 	}, nil
 }
 
-func (m *Migrator) ApplyMigrations(db *sql.DB) (err error) {
+func (m *Migrator) Apply(db *sql.DB) (err error) {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		return fmt.Errorf("create db instance: %w", err)
@@ -50,6 +53,19 @@ func (m *Migrator) ApplyMigrations(db *sql.DB) (err error) {
 	}()
 
 	if err = migrator.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+
+	return nil
+}
+
+func Apply(pool *pgxpool.Pool) error {
+	m, err := NewMigrator(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("create migrator: %w", err)
+	}
+
+	if err := m.Apply(stdlib.OpenDBFromPool(pool)); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 

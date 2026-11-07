@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  namespace: pgraph
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+    spec:
+      containers:
+        - image: pgraph-scheduler:v1
+          imagePullPolicy: IfNotPresent
+          name: scheduler
+          env:
+            - name: CONFIG_PATH
+              value: /etc/scheduler/scheduler.yaml
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: scheduler-config
+              mountPath: /etc/scheduler
+              readOnly: true
+      volumes:
+        - name: scheduler-config
+          configMap:
+            name: scheduler-file-config

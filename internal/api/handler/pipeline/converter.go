@@ -3,26 +3,26 @@ package pipelineHandler
 import (
 	"fmt"
 
-	genapi "github.com/AnarCom/p-graph/internal/api/gen"
+	gen "github.com/AnarCom/p-graph/internal/api/gen/apiserver"
 	"github.com/AnarCom/p-graph/internal/model"
 )
 
-func nodeCatalogToGen(c model.NodeCatalog) (genapi.NodeCatalog, error) {
-	types := make([]genapi.NodeTypeDefinition, 0, len(c.NodeTypes))
+func nodeCatalogToGen(c model.NodeCatalog) (gen.NodeCatalog, error) {
+	types := make([]gen.NodeTypeDefinition, 0, len(c.NodeTypes))
 	for _, nt := range c.NodeTypes {
 		converted, err := nodeTypeToGen(nt)
 		if err != nil {
-			return genapi.NodeCatalog{}, err
+			return gen.NodeCatalog{}, err
 		}
 		types = append(types, converted)
 	}
-	return genapi.NodeCatalog{CatalogVersion: c.CatalogVersion, NodeTypes: types}, nil
+	return gen.NodeCatalog{CatalogVersion: c.CatalogVersion, NodeTypes: types}, nil
 }
 
-func nodeTypeToGen(nt model.NodeTypeDefinition) (genapi.NodeTypeDefinition, error) {
-	inputs := make([]genapi.InputPortDefinition, 0, len(nt.Inputs))
+func nodeTypeToGen(nt model.NodeTypeDefinition) (gen.NodeTypeDefinition, error) {
+	inputs := make([]gen.InputPortDefinition, 0, len(nt.Inputs))
 	for _, p := range nt.Inputs {
-		inputs = append(inputs, genapi.InputPortDefinition{
+		inputs = append(inputs, gen.InputPortDefinition{
 			Name:           p.Name,
 			Title:          p.Title,
 			DataType:       p.DataType,
@@ -30,9 +30,9 @@ func nodeTypeToGen(nt model.NodeTypeDefinition) (genapi.NodeTypeDefinition, erro
 			MaxConnections: p.MaxConnections,
 		})
 	}
-	outputs := make([]genapi.OutputPortDefinition, 0, len(nt.Outputs))
+	outputs := make([]gen.OutputPortDefinition, 0, len(nt.Outputs))
 	for _, p := range nt.Outputs {
-		outputs = append(outputs, genapi.OutputPortDefinition{
+		outputs = append(outputs, gen.OutputPortDefinition{
 			Name:     p.Name,
 			Title:    p.Title,
 			DataType: p.DataType,
@@ -40,33 +40,33 @@ func nodeTypeToGen(nt model.NodeTypeDefinition) (genapi.NodeTypeDefinition, erro
 	}
 	configSchema, err := configSchemaToGen(nt.ConfigSchema)
 	if err != nil {
-		return genapi.NodeTypeDefinition{}, err
+		return gen.NodeTypeDefinition{}, err
 	}
-	return genapi.NodeTypeDefinition{
+	return gen.NodeTypeDefinition{
 		Type:         nt.Type,
 		Version:      nt.Version,
 		Title:        nt.Title,
 		Description:  nt.Description,
 		Category:     nt.Category,
-		Status:       genapi.NodeTypeStatus(nt.Status),
+		Status:       gen.NodeTypeStatus(nt.Status),
 		Inputs:       inputs,
 		Outputs:      outputs,
 		ConfigSchema: configSchema,
 	}, nil
 }
 
-func configSchemaToGen(cs model.ConfigSchema) (genapi.ConfigSchema, error) {
-	properties := make(map[string]genapi.ConfigPropertySchema, len(cs.Properties))
+func configSchemaToGen(cs model.ConfigSchema) (gen.ConfigSchema, error) {
+	properties := make(map[string]gen.ConfigPropertySchema, len(cs.Properties))
 	for name, p := range cs.Properties {
 		converted, err := configPropertyToGen(p)
 		if err != nil {
-			return genapi.ConfigSchema{}, fmt.Errorf("property %q: %w", name, err)
+			return gen.ConfigSchema{}, fmt.Errorf("property %q: %w", name, err)
 		}
 		properties[name] = converted
 	}
-	return genapi.ConfigSchema{
+	return gen.ConfigSchema{
 		Schema:               cs.Schema,
-		Type:                 genapi.ConfigSchemaType(cs.Type),
+		Type:                 gen.ConfigSchemaType(cs.Type),
 		Properties:           properties,
 		Required:             stringSliceToGen(cs.Required),
 		AdditionalProperties: cs.AdditionalProperties,
@@ -82,29 +82,29 @@ func stringSliceToGen(s []string) *[]string {
 	return &out
 }
 
-func configPropertyToGen(p model.ConfigPropertySchema) (genapi.ConfigPropertySchema, error) {
-	var def *genapi.ConfigPropertySchema_Default
+func configPropertyToGen(p model.ConfigPropertySchema) (gen.ConfigPropertySchema, error) {
+	var def *gen.ConfigPropertySchema_Default
 	if p.Default != nil {
 		v, err := configValueToGen(p.Default)
 		if err != nil {
-			return genapi.ConfigPropertySchema{}, fmt.Errorf("default: %w", err)
+			return gen.ConfigPropertySchema{}, fmt.Errorf("default: %w", err)
 		}
 		def = &v
 	}
-	var enum *[]genapi.ConfigPropertySchema_Enum_Item
+	var enum *[]gen.ConfigPropertySchema_Enum_Item
 	if p.Enum != nil {
-		items := make([]genapi.ConfigPropertySchema_Enum_Item, 0, len(p.Enum))
+		items := make([]gen.ConfigPropertySchema_Enum_Item, 0, len(p.Enum))
 		for _, e := range p.Enum {
 			item, err := configEnumItemToGen(e)
 			if err != nil {
-				return genapi.ConfigPropertySchema{}, fmt.Errorf("enum: %w", err)
+				return gen.ConfigPropertySchema{}, fmt.Errorf("enum: %w", err)
 			}
 			items = append(items, item)
 		}
 		enum = &items
 	}
-	return genapi.ConfigPropertySchema{
-		Type:        genapi.ConfigValueType(p.Type),
+	return gen.ConfigPropertySchema{
+		Type:        gen.ConfigValueType(p.Type),
 		Title:       p.Title,
 		Description: p.Description,
 		Default:     def,
@@ -112,8 +112,8 @@ func configPropertyToGen(p model.ConfigPropertySchema) (genapi.ConfigPropertySch
 	}, nil
 }
 
-func configValueToGen(v any) (genapi.ConfigPropertySchema_Default, error) {
-	var u genapi.ConfigPropertySchema_Default
+func configValueToGen(v any) (gen.ConfigPropertySchema_Default, error) {
+	var u gen.ConfigPropertySchema_Default
 	switch t := v.(type) {
 	case string:
 		return u, u.FromConfigPropertySchemaDefault0(t)
@@ -130,8 +130,8 @@ func configValueToGen(v any) (genapi.ConfigPropertySchema_Default, error) {
 	}
 }
 
-func configEnumItemToGen(v any) (genapi.ConfigPropertySchema_Enum_Item, error) {
-	var u genapi.ConfigPropertySchema_Enum_Item
+func configEnumItemToGen(v any) (gen.ConfigPropertySchema_Enum_Item, error) {
+	var u gen.ConfigPropertySchema_Enum_Item
 	switch t := v.(type) {
 	case string:
 		return u, u.FromConfigPropertySchemaEnum0(t)
@@ -148,40 +148,40 @@ func configEnumItemToGen(v any) (genapi.ConfigPropertySchema_Enum_Item, error) {
 	}
 }
 
-func pipelineDraftToGen(d model.PipelineDraft) (genapi.PipelineDraft, error) {
+func pipelineDraftToGen(d model.PipelineDraft) (gen.PipelineDraft, error) {
 	definition, err := pipelineDefinitionToGen(d.Definition)
 	if err != nil {
-		return genapi.PipelineDraft{}, err
+		return gen.PipelineDraft{}, err
 	}
-	return genapi.PipelineDraft{
+	return gen.PipelineDraft{
 		PipelineId:   d.PipelineID,
 		BaseRevision: d.BaseRevision,
 		Definition:   definition,
 	}, nil
 }
 
-func pipelineDefinitionToGen(d model.PipelineDefinition) (genapi.PipelineDefinition, error) {
-	inputs := make(map[string]genapi.PipelineInput, len(d.Inputs))
+func pipelineDefinitionToGen(d model.PipelineDefinition) (gen.PipelineDefinition, error) {
+	inputs := make(map[string]gen.PipelineInput, len(d.Inputs))
 	for name, in := range d.Inputs {
-		inputs[name] = genapi.PipelineInput{Type: in.Type, Title: in.Title, Required: in.Required}
+		inputs[name] = gen.PipelineInput{Type: in.Type, Title: in.Title, Required: in.Required}
 	}
-	nodes := make([]genapi.PipelineNode, 0, len(d.Nodes))
+	nodes := make([]gen.PipelineNode, 0, len(d.Nodes))
 	for _, n := range d.Nodes {
 		nodes = append(nodes, pipelineNodeToGen(n))
 	}
-	edges := make([]genapi.PipelineEdge, 0, len(d.Edges))
+	edges := make([]gen.PipelineEdge, 0, len(d.Edges))
 	for _, e := range d.Edges {
-		edges = append(edges, genapi.PipelineEdge{
+		edges = append(edges, gen.PipelineEdge{
 			Id:     e.ID,
-			Source: genapi.EdgeEndpoint{NodeId: e.Source.NodeID, Port: e.Source.Port},
-			Target: genapi.EdgeEndpoint{NodeId: e.Target.NodeID, Port: e.Target.Port},
+			Source: gen.EdgeEndpoint{NodeId: e.Source.NodeID, Port: e.Source.Port},
+			Target: gen.EdgeEndpoint{NodeId: e.Target.NodeID, Port: e.Target.Port},
 		})
 	}
-	var ui *genapi.GraphUi
+	var ui *gen.GraphUi
 	if d.UI != nil {
-		ui = &genapi.GraphUi{Viewport: viewportToGen(d.UI.Viewport), AdditionalProperties: copyMap(d.UI.Extra)}
+		ui = &gen.GraphUi{Viewport: viewportToGen(d.UI.Viewport), AdditionalProperties: copyMap(d.UI.Extra)}
 	}
-	return genapi.PipelineDefinition{
+	return gen.PipelineDefinition{
 		SchemaVersion:      d.SchemaVersion,
 		NodeCatalogVersion: d.NodeCatalogVersion,
 		Inputs:             inputs,
@@ -191,12 +191,12 @@ func pipelineDefinitionToGen(d model.PipelineDefinition) (genapi.PipelineDefinit
 	}, nil
 }
 
-func pipelineNodeToGen(n model.PipelineNode) genapi.PipelineNode {
-	var ui *genapi.NodeUi
+func pipelineNodeToGen(n model.PipelineNode) gen.PipelineNode {
+	var ui *gen.NodeUi
 	if n.UI != nil {
-		ui = &genapi.NodeUi{Position: positionToGen(n.UI.Position), AdditionalProperties: copyMap(n.UI.Extra)}
+		ui = &gen.NodeUi{Position: positionToGen(n.UI.Position), AdditionalProperties: copyMap(n.UI.Extra)}
 	}
-	return genapi.PipelineNode{
+	return gen.PipelineNode{
 		Id:          n.ID,
 		Type:        n.Type,
 		TypeVersion: n.TypeVersion,
@@ -206,28 +206,28 @@ func pipelineNodeToGen(n model.PipelineNode) genapi.PipelineNode {
 	}
 }
 
-func viewportToGen(v *model.Viewport) *genapi.Viewport {
+func viewportToGen(v *model.Viewport) *gen.Viewport {
 	if v == nil {
 		return nil
 	}
-	return &genapi.Viewport{X: v.X, Y: v.Y, Zoom: v.Zoom}
+	return &gen.Viewport{X: v.X, Y: v.Y, Zoom: v.Zoom}
 }
 
-func positionToGen(p *model.Position) *genapi.Position {
+func positionToGen(p *model.Position) *gen.Position {
 	if p == nil {
 		return nil
 	}
-	return &genapi.Position{X: p.X, Y: p.Y}
+	return &gen.Position{X: p.X, Y: p.Y}
 }
 
-func validationResultToGen(r model.ValidationResult) genapi.ValidationResult {
-	issues := make([]genapi.ValidationIssue, 0, len(r.Issues))
+func validationResultToGen(r model.ValidationResult) gen.ValidationResult {
+	issues := make([]gen.ValidationIssue, 0, len(r.Issues))
 	for _, i := range r.Issues {
-		issues = append(issues, genapi.ValidationIssue{
+		issues = append(issues, gen.ValidationIssue{
 			Code:    i.Code,
 			Message: i.Message,
-			Location: genapi.ValidationLocation{
-				Kind:       genapi.ValidationLocationKind(i.Location.Kind),
+			Location: gen.ValidationLocation{
+				Kind:       gen.ValidationLocationKind(i.Location.Kind),
 				NodeId:     i.Location.NodeID,
 				EdgeId:     i.Location.EdgeID,
 				Port:       i.Location.Port,
@@ -235,10 +235,10 @@ func validationResultToGen(r model.ValidationResult) genapi.ValidationResult {
 			},
 		})
 	}
-	return genapi.ValidationResult{Valid: r.Valid, Issues: issues}
+	return gen.ValidationResult{Valid: r.Valid, Issues: issues}
 }
 
-func pipelineDraftFromGen(d genapi.PipelineDraft) (model.PipelineDraft, error) {
+func pipelineDraftFromGen(d gen.PipelineDraft) (model.PipelineDraft, error) {
 	definition, err := pipelineDefinitionFromGen(d.Definition)
 	if err != nil {
 		return model.PipelineDraft{}, err
@@ -250,7 +250,7 @@ func pipelineDraftFromGen(d genapi.PipelineDraft) (model.PipelineDraft, error) {
 	}, nil
 }
 
-func pipelineDefinitionFromGen(d genapi.PipelineDefinition) (model.PipelineDefinition, error) {
+func pipelineDefinitionFromGen(d gen.PipelineDefinition) (model.PipelineDefinition, error) {
 	inputs := make(map[string]model.PipelineInput, len(d.Inputs))
 	for name, in := range d.Inputs {
 		inputs[name] = model.PipelineInput{Type: in.Type, Title: in.Title, Required: in.Required}
@@ -281,7 +281,7 @@ func pipelineDefinitionFromGen(d genapi.PipelineDefinition) (model.PipelineDefin
 	}, nil
 }
 
-func pipelineNodeFromGen(n genapi.PipelineNode) model.PipelineNode {
+func pipelineNodeFromGen(n gen.PipelineNode) model.PipelineNode {
 	var ui *model.NodeUI
 	if n.Ui != nil {
 		ui = &model.NodeUI{Position: positionFromGen(n.Ui.Position), Extra: copyMap(n.Ui.AdditionalProperties)}
@@ -296,14 +296,14 @@ func pipelineNodeFromGen(n genapi.PipelineNode) model.PipelineNode {
 	}
 }
 
-func viewportFromGen(v *genapi.Viewport) *model.Viewport {
+func viewportFromGen(v *gen.Viewport) *model.Viewport {
 	if v == nil {
 		return nil
 	}
 	return &model.Viewport{X: v.X, Y: v.Y, Zoom: v.Zoom}
 }
 
-func positionFromGen(p *genapi.Position) *model.Position {
+func positionFromGen(p *gen.Position) *model.Position {
 	if p == nil {
 		return nil
 	}
