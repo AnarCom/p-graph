@@ -1,0 +1,5 @@
+apiserver:
+  image: pgraph-apiserver:v1
+
+scheduler:
+  image: pgraph-scheduler:v1

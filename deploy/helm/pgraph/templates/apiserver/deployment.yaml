@@ -14,7 +14,7 @@ spec:
         app: apiserver
     spec:
       containers:
-        - image: pgraph-apiserver:v1
+        - image: {{ .Values.apiserver.image }}
           imagePullPolicy: IfNotPresent
           name: apiserver
           env:

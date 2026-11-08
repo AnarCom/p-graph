@@ -14,7 +14,7 @@ spec:
         app: scheduler
     spec:
       containers:
-        - image: pgraph-scheduler:v1
+        - image: {{ .Values.scheduler.image }}
           imagePullPolicy: IfNotPresent
           name: scheduler
           env:

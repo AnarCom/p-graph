@@ -12,7 +12,7 @@ spec:
     plural: clusterworkflowtemplates
     shortNames:
     - clusterwftmpl
-    - cwftkubectl kustomize deploy/k8s | grep -n "auth-mode" -n
+    - cwft
     singular: clusterworkflowtemplate
   scope: Cluster
   versions:
@@ -1133,6 +1133,7 @@ spec:
       - args:
         - server
         - --namespaced
+        - --auth-mode=server
         env: []
         image: quay.io/argoproj/argocli:v3.4.6
         name: argo-server

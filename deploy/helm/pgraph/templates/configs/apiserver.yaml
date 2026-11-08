@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apiserver-file-config
+  namespace: pgraph
+data:
+  apiserver.yaml: |
+    {{- .Files.Get "configs/apiserver.yaml" | nindent 4 }}

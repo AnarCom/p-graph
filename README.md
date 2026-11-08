@@ -73,12 +73,16 @@ p-graph/
 ├── migrations/                 # SQL-миграции, схема БД меняется только через них
 ├── deploy/
 │   ├── docker/                 # Dockerfiles сервисов
-│   └── k8s/                    # манифесты кластера: каталог = приложение
-│       ├── postgres/           #   БД (deployment, service, pvc)
-│       ├── minio/              #   S3-хранилище (deployment, service, ingress)
-│       ├── apiserver/          #   API Server (deployment, service, ingress)
-│       ├── orchestrator/       #   Orchestrator (deployment, service, rbac)
-│       └── argo/               #   Argo (ingress, configmap)
+│   └── helm/
+│       └── pgraph/              # Helm-чарт
+│           ├── configs/        #   конфиги сервисов (попадают в ConfigMap'ы)
+│           └── templates/      #   манифесты: каталог = приложение
+│               ├── postgres/   #     БД (statefulset, service, pvc)
+│               ├── minio/      #     S3-хранилище (pod, service, ingress)
+│               ├── apiserver/  #     API Server (deployment, service, ingress)
+│               ├── scheduler/  #     Scheduler (deployment, service)
+│               ├── argo/       #     Argo Workflows (base, configmap, ingress)
+│               └── configs/    #     ConfigMap'ы из файлов конфигов
 ├── go.mod                      # module github.com/AnarCom/p-graph
 ├── CLAUDE.md                   # соглашения проекта
 ├── LICENSE                     # Apache License 2.0
@@ -87,7 +91,7 @@ p-graph/
 
 ## Локальный запуск (minikube)
 
-Требуется: [minikube](https://minikube.sigs.k8s.io/docs/start/), `kubectl`, драйвер docker.
+Требуется: [minikube](https://minikube.sigs.k8s.io/docs/start/), `kubectl`, `helm`, драйвер docker.
 
 ```bash
 # 1. Поднять кластер с ingress-контроллером (один раз)
@@ -100,8 +104,8 @@ minikube image load pgraph-apiserver:v1
 docker build -f deploy/docker/go/Dockerfile --build-arg SERVICE=scheduler -t pgraph-scheduler:v1 .
 minikube image load pgraph-scheduler:v1
 
-# 3. Применить все манифесты (namespace pgraph)
-kubectl apply -k deploy/k8s
+# 3. Установить chart (namespace pgraph создаётся автоматически)
+helm install pgraph deploy/helm/pgraph -n pgraph --create-namespace
 
 # 4. Проверить, что всё поднялось
 kubectl get pods -n pgraph
@@ -114,16 +118,13 @@ psql -h 127.0.0.1 -U pgraph -d pgraph
 echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null # добавляем локальную DNS запись
 sudo minikube tunnel
 curl http://minio.local
+создать argo-bucket
 
 # 7. Для доступа к argo
 echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null
 curl http://argo.local
 
-# 8. Чтобы запустить workflow
-создать argo-bucket
-в argo интерфейсе запустить workflow
-
-# 9. Для доступа к apiserver
+# 8. Для доступа к apiserver
 echo "127.0.0.1 apiserver.local" | sudo tee -a /etc/hosts > /dev/null
 curl http://apiserver.local/health
 ```
