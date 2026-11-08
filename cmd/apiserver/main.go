@@ -35,7 +35,7 @@ func main() {
 	tx := storage.NewTransactor(pool)
 
 	handler := pipelineHandler.NewPipelineMux(pipelineHandler.NewPipelineHandler(
-		pipelineSvc.NewService(store, tx),
+		pipelineSvc.NewPipelineService(store, tx),
 	))
 
 	srv := &http.Server{

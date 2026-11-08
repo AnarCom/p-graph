@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	schedulerHandler "github.com/AnarCom/p-graph/internal/api/handler/scheduler"
+	"github.com/AnarCom/p-graph/internal/client/argo"
 	"github.com/AnarCom/p-graph/internal/config"
 	runSvc "github.com/AnarCom/p-graph/internal/service/run"
 )
@@ -15,7 +16,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(runSvc.NewService()))
+	argoClient := argo.NewArgoClient(cfg.ArgoServerURL, cfg.ArgoNamespace)
+
+	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(runSvc.NewRunService(argoClient)))
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,

@@ -7,8 +7,10 @@ import (
 )
 
 type Config struct {
-	ListenAddr  string `mapstructure:"listen_addr"`
-	DatabaseURL string `mapstructure:"database_url"`
+	ListenAddr    string `mapstructure:"listen_addr"`
+	DatabaseURL   string `mapstructure:"database_url"`
+	ArgoServerURL string `mapstructure:"argo_server_url"`
+	ArgoNamespace string `mapstructure:"argo_namespace"`
 }
 
 func Load() (*Config, error) {

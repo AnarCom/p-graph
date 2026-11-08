@@ -10,7 +10,7 @@ import (
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 )
 
-type Store interface {
+type PipelineStore interface {
 	GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error)
 	GetDraft(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
 	GetLatestRevision(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
@@ -23,16 +23,16 @@ type Transactor interface {
 	Do(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-type Service struct {
-	store Store
+type PipelineService struct {
+	store PipelineStore
 	tx    Transactor
 }
 
-func NewService(store Store, tx Transactor) *Service {
-	return &Service{store: store, tx: tx}
+func NewPipelineService(store PipelineStore, tx Transactor) *PipelineService {
+	return &PipelineService{store: store, tx: tx}
 }
 
-func (s *Service) GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error) {
+func (s *PipelineService) GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error) {
 	var catalog model.NodeCatalog
 
 	err := s.tx.Do(ctx, func(ctx context.Context) error {
@@ -50,7 +50,7 @@ func (s *Service) GetNodeCatalog(ctx context.Context, version *string) (model.No
 	return catalog, nil
 }
 
-func (s *Service) GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
+func (s *PipelineService) GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
 	id, err := parsePipelineID(pipelineID)
 	if err != nil {
 		return model.PipelineDraft{}, err
@@ -86,7 +86,7 @@ func (s *Service) GetDraft(ctx context.Context, pipelineID string) (model.Pipeli
 	return draft, nil
 }
 
-func (s *Service) SaveDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error {
+func (s *PipelineService) SaveDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error {
 	id, err := parsePipelineID(pipelineID)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (s *Service) SaveDraft(ctx context.Context, pipelineID string, draft model.
 	})
 }
 
-func (s *Service) ResetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
+func (s *PipelineService) ResetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error) {
 	id, err := parsePipelineID(pipelineID)
 	if err != nil {
 		return model.PipelineDraft{}, err
@@ -139,7 +139,7 @@ func (s *Service) ResetDraft(ctx context.Context, pipelineID string) (model.Pipe
 	return latest, nil
 }
 
-func (s *Service) ValidateDraft(ctx context.Context, pipelineID string, _ model.PipelineDefinition) (model.ValidationResult, error) {
+func (s *PipelineService) ValidateDraft(ctx context.Context, pipelineID string, _ model.PipelineDefinition) (model.ValidationResult, error) {
 	id, err := parsePipelineID(pipelineID)
 	if err != nil {
 		return model.ValidationResult{}, err

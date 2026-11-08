@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: pgraph-print-file-
+spec:
+  serviceAccountName: argo
+  arguments:
+    artifacts:
+      - name: source-file
+        raw:
+          data: |
+            Hello from p-graph!
+            Это содержимое входного файла sourceFile.
+  entrypoint: print-file
+  templates:
+    - name: print-file
+      inputs:
+        artifacts:
+          - name: source-file
+            path: /tmp/source.txt
+      container:
+        image: alpine:3.18
+        command: [sh, -c]
+        args: ["cat /tmp/source.txt"]

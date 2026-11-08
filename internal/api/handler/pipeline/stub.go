@@ -18,13 +18,13 @@ var sampleDraftFixture []byte
 //go:embed fixtures/validation_result.json
 var validationResultFixture []byte
 
-type StubHandler struct {
+type StubPipelineHandler struct {
 	nodeCatalog      gen.NodeCatalog
 	sampleDraft      gen.PipelineDraft
 	validationResult gen.ValidationResult
 }
 
-func NewStubHandler() (*StubHandler, error) {
+func NewStubPipelineHandler() (*StubPipelineHandler, error) {
 	var catalog gen.NodeCatalog
 	if err := json.Unmarshal(nodeCatalogFixture, &catalog); err != nil {
 		return nil, fmt.Errorf("unmarshal node catalog fixture: %w", err)
@@ -40,35 +40,35 @@ func NewStubHandler() (*StubHandler, error) {
 		return nil, fmt.Errorf("unmarshal validation result fixture: %w", err)
 	}
 
-	return &StubHandler{
+	return &StubPipelineHandler{
 		nodeCatalog:      catalog,
 		sampleDraft:      draft,
 		validationResult: result,
 	}, nil
 }
 
-func (h *StubHandler) Health(context.Context, gen.HealthRequestObject) (gen.HealthResponseObject, error) {
+func (h *StubPipelineHandler) Health(context.Context, gen.HealthRequestObject) (gen.HealthResponseObject, error) {
 	return gen.Health200JSONResponse{Status: "ok"}, nil
 }
 
-func (h *StubHandler) GetNodeCatalog(context.Context, gen.GetNodeCatalogRequestObject) (gen.GetNodeCatalogResponseObject, error) {
+func (h *StubPipelineHandler) GetNodeCatalog(context.Context, gen.GetNodeCatalogRequestObject) (gen.GetNodeCatalogResponseObject, error) {
 	return gen.GetNodeCatalog200JSONResponse(h.nodeCatalog), nil
 }
 
-func (h *StubHandler) GetDraft(context.Context, gen.GetDraftRequestObject) (gen.GetDraftResponseObject, error) {
+func (h *StubPipelineHandler) GetDraft(context.Context, gen.GetDraftRequestObject) (gen.GetDraftResponseObject, error) {
 	return gen.GetDraft200JSONResponse(h.sampleDraft), nil
 }
 
-func (h *StubHandler) SaveDraft(context.Context, gen.SaveDraftRequestObject) (gen.SaveDraftResponseObject, error) {
+func (h *StubPipelineHandler) SaveDraft(context.Context, gen.SaveDraftRequestObject) (gen.SaveDraftResponseObject, error) {
 	return gen.SaveDraft204Response{}, nil
 }
 
-func (h *StubHandler) ResetDraft(context.Context, gen.ResetDraftRequestObject) (gen.ResetDraftResponseObject, error) {
+func (h *StubPipelineHandler) ResetDraft(context.Context, gen.ResetDraftRequestObject) (gen.ResetDraftResponseObject, error) {
 	return gen.ResetDraft200JSONResponse(h.sampleDraft), nil
 }
 
-func (h *StubHandler) ValidateDraft(context.Context, gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {
+func (h *StubPipelineHandler) ValidateDraft(context.Context, gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {
 	return gen.ValidateDraft200JSONResponse(h.validationResult), nil
 }
 
-var _ gen.StrictServerInterface = (*StubHandler)(nil)
+var _ gen.StrictServerInterface = (*StubPipelineHandler)(nil)

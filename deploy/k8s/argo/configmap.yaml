@@ -7,6 +7,7 @@ metadata:
     workflows.argoproj.io/default-artifact-repository: default-v1-s3-artifact-repository
 data:
   default-v1-s3-artifact-repository: |
+    archiveLogs: true
     s3:
       endpoint: minio-service:9000
       bucket: argo-bucket
