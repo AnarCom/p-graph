@@ -13,6 +13,8 @@ spec:
       labels:
         app: scheduler
     spec:
+      initContainers:
+        {{- include "pgraph.waitForPostgres" . | nindent 8 }}
       containers:
         - image: {{ .Values.scheduler.image }}
           imagePullPolicy: IfNotPresent

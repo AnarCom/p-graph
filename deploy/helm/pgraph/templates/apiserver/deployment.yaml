@@ -13,6 +13,8 @@ spec:
       labels:
         app: apiserver
     spec:
+      initContainers:
+        {{- include "pgraph.waitForPostgres" . | nindent 8 }}
       containers:
         - image: {{ .Values.apiserver.image }}
           imagePullPolicy: IfNotPresent
