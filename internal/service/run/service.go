@@ -2,32 +2,54 @@ package runSvc
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
-	"strconv"
 
-	"gopkg.in/yaml.v3"
+	"github.com/google/uuid"
 
 	"github.com/AnarCom/p-graph/internal/model"
 )
 
-//go:embed fixtures/workflow.yaml
-var workflowFixture []byte
+type RunStore interface {
+	GetRevision(ctx context.Context, pipelineID uuid.UUID, revision int32) (model.PipelineDraft, bool, error)
+}
 
-type WorkflowSubmitter interface {
-	SubmitWorkflow(ctx context.Context, workflow json.RawMessage) (string, error)
+type Transactor interface {
+	Do(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 type RunService struct {
-	argo WorkflowSubmitter
+	store RunStore
+	tx    Transactor
+	argo  WorkflowSubmitter
 }
 
-func NewRunService(argo WorkflowSubmitter) *RunService {
-	return &RunService{argo: argo}
+func NewRunService(store RunStore, tx Transactor, argo WorkflowSubmitter) *RunService {
+	return &RunService{store: store, tx: tx, argo: argo}
 }
 
 func (s *RunService) RunPipeline(ctx context.Context, pipelineID string, revision int32) (model.Run, error) {
-	workflow, err := buildWorkflow(pipelineID, revision)
+	id, err := uuid.Parse(pipelineID)
+	if err != nil {
+		return model.Run{}, ErrPipelineNotFound
+	}
+
+	var definition model.PipelineDefinition
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		draft, ok, err := s.store.GetRevision(ctx, id, revision)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrPipelineNotFound
+		}
+		definition = draft.Definition
+		return nil
+	})
+	if err != nil {
+		return model.Run{}, err
+	}
+
+	workflow, err := buildWorkflow(definition, pipelineID, revision)
 	if err != nil {
 		return model.Run{}, err
 	}
@@ -43,26 +65,4 @@ func (s *RunService) RunPipeline(ctx context.Context, pipelineID string, revisio
 		Revision:   revision,
 		Status:     model.RunStatusScheduled,
 	}, nil
-}
-
-func buildWorkflow(pipelineID string, revision int32) (json.RawMessage, error) {
-	var wf map[string]any
-	if err := yaml.Unmarshal(workflowFixture, &wf); err != nil {
-		return nil, err
-	}
-
-	meta, _ := wf["metadata"].(map[string]any)
-	if meta == nil {
-		meta = map[string]any{}
-		wf["metadata"] = meta
-	}
-	labels, _ := meta["labels"].(map[string]any)
-	if labels == nil {
-		labels = map[string]any{}
-		meta["labels"] = labels
-	}
-	labels["pipeline-id"] = pipelineID
-	labels["revision"] = strconv.Itoa(int(revision))
-
-	return json.Marshal(wf)
 }

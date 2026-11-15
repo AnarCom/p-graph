@@ -14,6 +14,7 @@ type PipelineService interface {
 	GetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error)
 	SaveDraft(ctx context.Context, pipelineID string, draft model.PipelineDraft) error
 	ResetDraft(ctx context.Context, pipelineID string) (model.PipelineDraft, error)
+	PublishDraft(ctx context.Context, pipelineID string) (int32, error)
 	ValidateDraft(ctx context.Context, pipelineID string, definition model.PipelineDefinition) (model.ValidationResult, error)
 }
 
@@ -98,6 +99,23 @@ func (h *PipelineHandler) ResetDraft(ctx context.Context, req gen.ResetDraftRequ
 		return nil, err
 	}
 	return gen.ResetDraft200JSONResponse(out), nil
+}
+
+func (h *PipelineHandler) PublishDraft(ctx context.Context, req gen.PublishDraftRequestObject) (gen.PublishDraftResponseObject, error) {
+	revision, err := h.pipelineSvc.PublishDraft(ctx, req.PipelineId)
+	switch {
+	case errors.Is(err, pipelineSvc.ErrPipelineNotFound):
+		return publishDraftNotFound(gen.ApiserverPipelineNotFound{Message: err.Error()}), nil
+	case errors.Is(err, pipelineSvc.ErrDraftNotFound):
+		return publishDraftNotFound(gen.ApiserverDraftNotFound{Message: err.Error()}), nil
+	case err != nil:
+		return nil, err
+	}
+
+	return gen.PublishDraft200JSONResponse(gen.PublishedPipeline{
+		PipelineId: req.PipelineId,
+		Revision:   revision,
+	}), nil
 }
 
 func (h *PipelineHandler) ValidateDraft(ctx context.Context, req gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {

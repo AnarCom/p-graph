@@ -21,6 +21,12 @@ namespace PGraph.Apiserver {
   }
 
   @error
+  model DraftNotFound {
+    @statusCode code: 404;
+    message: string;
+  }
+
+  @error
   model DraftConflict {
     @statusCode code: 409;
     message: string;
@@ -58,6 +64,14 @@ namespace PGraph.Apiserver {
   op resetDraft(
     @path pipelineId: string;
   ): PipelineDraft | PipelineNotFound;
+
+  @operationId("publishDraft")
+  @tag("apiserver")
+  @route("/pipelines/{pipelineId}/publish")
+  @post
+  op publishDraft(
+    @path pipelineId: string;
+  ): PublishedPipeline | PipelineNotFound | DraftNotFound;
 
   @operationId("validateDraft")
   @tag("apiserver")

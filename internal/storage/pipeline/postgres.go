@@ -162,6 +162,60 @@ func (s *PostgresStorage) GetLatestRevision(ctx context.Context, pipelineID uuid
 	return draft, true, nil
 }
 
+func (s *PostgresStorage) GetRevision(ctx context.Context, pipelineID uuid.UUID, revision int32) (model.PipelineDraft, bool, error) {
+	conn, err := storage.ExecutorFrom(ctx)
+	if err != nil {
+		return model.PipelineDraft{}, false, err
+	}
+
+	var (
+		rev            int64
+		definitionJSON []byte
+	)
+	err = conn.QueryRow(ctx, `
+		SELECT revision, definition
+		FROM pipeline_revisions
+		WHERE pipeline_id = $1 AND revision = $2
+	`, pipelineID, revision).Scan(&rev, &definitionJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.PipelineDraft{}, false, nil
+	}
+	if err != nil {
+		return model.PipelineDraft{}, false, fmt.Errorf("get pipeline revision: %w", err)
+	}
+
+	draft, err := draftFromJSON(pipelineID.String(), &rev, definitionJSON)
+	if err != nil {
+		return model.PipelineDraft{}, false, err
+	}
+	return draft, true, nil
+}
+
+func (s *PostgresStorage) CreateRevision(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) (int32, error) {
+	conn, err := storage.ExecutorFrom(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	definitionJSON, err := json.Marshal(definitionFromModel(draft.Definition))
+	if err != nil {
+		return 0, fmt.Errorf("marshal definition: %w", err)
+	}
+
+	var revision int32
+	err = conn.QueryRow(ctx, `
+		INSERT INTO pipeline_revisions (pipeline_id, revision, definition)
+		SELECT $1, COALESCE(MAX(revision), 0) + 1, $2
+		FROM pipeline_revisions
+		WHERE pipeline_id = $1
+		RETURNING revision
+	`, pipelineID, definitionJSON).Scan(&revision)
+	if err != nil {
+		return 0, fmt.Errorf("create pipeline revision: %w", err)
+	}
+	return revision, nil
+}
+
 func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) error {
 	conn, err := storage.ExecutorFrom(ctx)
 	if err != nil {

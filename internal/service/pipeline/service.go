@@ -14,6 +14,8 @@ type PipelineStore interface {
 	GetNodeCatalog(ctx context.Context, version *string) (model.NodeCatalog, error)
 	GetDraft(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
 	GetLatestRevision(ctx context.Context, pipelineID uuid.UUID) (model.PipelineDraft, bool, error)
+	GetRevision(ctx context.Context, pipelineID uuid.UUID, revision int32) (model.PipelineDraft, bool, error)
+	CreateRevision(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) (int32, error)
 	UpsertDraft(ctx context.Context, pipelineID uuid.UUID, draft model.PipelineDraft) error
 	DeleteDraft(ctx context.Context, pipelineID uuid.UUID) error
 	PipelineExists(ctx context.Context, pipelineID uuid.UUID) (bool, error)
@@ -137,6 +139,40 @@ func (s *PipelineService) ResetDraft(ctx context.Context, pipelineID string) (mo
 	}
 
 	return latest, nil
+}
+
+func (s *PipelineService) PublishDraft(ctx context.Context, pipelineID string) (int32, error) {
+	id, err := parsePipelineID(pipelineID)
+	if err != nil {
+		return 0, err
+	}
+
+	var revision int32
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		draft, ok, err := s.store.GetDraft(ctx, id)
+		if err != nil {
+			return fromStoreError(err)
+		}
+		if !ok {
+			return ErrDraftNotFound
+		}
+
+		revision, err = s.store.CreateRevision(ctx, id, draft)
+		if err != nil {
+			return fromStoreError(err)
+		}
+
+		if err := s.store.DeleteDraft(ctx, id); err != nil {
+			return fromStoreError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return revision, nil
 }
 
 func (s *PipelineService) ValidateDraft(ctx context.Context, pipelineID string, _ model.PipelineDefinition) (model.ValidationResult, error) {

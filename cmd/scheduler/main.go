@@ -11,6 +11,7 @@ import (
 	"github.com/AnarCom/p-graph/internal/migrator"
 	runSvc "github.com/AnarCom/p-graph/internal/service/run"
 	"github.com/AnarCom/p-graph/internal/storage"
+	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 )
 
 func main() {
@@ -33,7 +34,10 @@ func main() {
 
 	argoClient := argo.NewArgoClient(cfg.ArgoServerURL, cfg.ArgoNamespace)
 
-	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(runSvc.NewRunService(argoClient)))
+	store := pipelineStorage.NewPostgresStorage(pool)
+	tx := storage.NewTransactor(pool)
+
+	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(runSvc.NewRunService(store, tx, argoClient)))
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,

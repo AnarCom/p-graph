@@ -220,6 +220,17 @@ func positionToGen(p *model.Position) *gen.Position {
 	return &gen.Position{X: p.X, Y: p.Y}
 }
 
+func publishDraftNotFound(body any) gen.PublishDraft404JSONResponse {
+	var resp gen.PublishDraft404JSONResponse
+	switch v := body.(type) {
+	case gen.ApiserverPipelineNotFound:
+		_ = resp.FromApiserverPipelineNotFound(v)
+	case gen.ApiserverDraftNotFound:
+		_ = resp.FromApiserverDraftNotFound(v)
+	}
+	return resp
+}
+
 func validationResultToGen(r model.ValidationResult) gen.ValidationResult {
 	issues := make([]gen.ValidationIssue, 0, len(r.Issues))
 	for _, i := range r.Issues {

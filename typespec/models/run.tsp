@@ -18,5 +18,6 @@ namespace PGraph.Scheduler {
   model RunPipelineRequest {
     pipelineId: string;
     revision: int32;
+    inputs?: Record<string>;
   }
 }

@@ -67,6 +67,13 @@ func (h *StubPipelineHandler) ResetDraft(context.Context, gen.ResetDraftRequestO
 	return gen.ResetDraft200JSONResponse(h.sampleDraft), nil
 }
 
+func (h *StubPipelineHandler) PublishDraft(_ context.Context, req gen.PublishDraftRequestObject) (gen.PublishDraftResponseObject, error) {
+	return gen.PublishDraft200JSONResponse(gen.PublishedPipeline{
+		PipelineId: req.PipelineId,
+		Revision:   1,
+	}), nil
+}
+
 func (h *StubPipelineHandler) ValidateDraft(context.Context, gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {
 	return gen.ValidateDraft200JSONResponse(h.validationResult), nil
 }

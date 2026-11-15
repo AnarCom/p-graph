@@ -30,7 +30,7 @@ func (h *SchedulerHandler) RunPipeline(ctx context.Context, req gen.RunPipelineR
 
 	run, err := h.runSvc.RunPipeline(ctx, req.Body.PipelineId, req.Body.Revision)
 	if err != nil {
-		return nil, err
+		return gen.RunPipeline400JSONResponse{Message: err.Error()}, nil
 	}
 
 	return gen.RunPipeline200JSONResponse(runToGen(run)), nil

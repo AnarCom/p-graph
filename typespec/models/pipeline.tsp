@@ -56,4 +56,9 @@ namespace PGraph {
     baseRevision: int64 | null;
     definition: PipelineDefinition;
   }
+
+  model PublishedPipeline {
+    pipelineId: string;
+    revision: int32;
+  }
 }
