@@ -124,10 +124,14 @@ curl http://minio.local
 echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts > /dev/null
 curl http://argo.local
 
-# 8. Для доступа к apiserver
+# 8. Для доступа к swagger-ui
 echo "127.0.0.1 apiserver.local" | sudo tee -a /etc/hosts > /dev/null
-curl http://apiserver.local/health
+http://apiserver.local/docs
 ```
+
+## Swagger UI
+
+Ручное тестирование API без фронтенда: [apiserver.local/docs](http://apiserver.local/docs).
 
 ## Генерация API-контракта (TypeSpec → OpenAPI → Go)
 

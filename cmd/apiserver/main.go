@@ -6,11 +6,13 @@ import (
 	"net/http"
 
 	pipelineHandler "github.com/AnarCom/p-graph/internal/api/handler/pipeline"
+	"github.com/AnarCom/p-graph/internal/api/docs"
 	"github.com/AnarCom/p-graph/internal/config"
 	"github.com/AnarCom/p-graph/internal/migrator"
 	pipelineSvc "github.com/AnarCom/p-graph/internal/service/pipeline"
 	"github.com/AnarCom/p-graph/internal/storage"
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
+	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -34,13 +36,15 @@ func main() {
 	store := pipelineStorage.NewPostgresStorage(pool)
 	tx := storage.NewTransactor(pool)
 
-	handler := pipelineHandler.NewPipelineMux(pipelineHandler.NewPipelineHandler(
+	root := mux.NewRouter()
+	docs.Register(root)
+	root.PathPrefix("/").Handler(pipelineHandler.NewPipelineMux(pipelineHandler.NewPipelineHandler(
 		pipelineSvc.NewPipelineService(store, tx),
-	))
+	)))
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,
-		Handler: handler,
+		Handler: root,
 	}
 
 	log.Printf("apiserver listening on %s", cfg.ListenAddr)
