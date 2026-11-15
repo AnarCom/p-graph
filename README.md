@@ -89,6 +89,19 @@ p-graph/
 └── README.md
 ```
 
+## Frontend
+
+В `ui/` реализован редактор с HTTP API по умолчанию и локальным режимом `?mock=true`: React Flow, Material UI,
+пользовательские Python-кубики с CodeMirror и декларацией окружения
+(версия Python и зависимости), редактируемые порты, несколько
+связей в один вход, return и просмотр демонстрационных логов. Черновик с кодом
+и портами сохраняется в localStorage и экспортируется в JSON версии 0.2.
+
+[Запуск frontend](docs/frontend-runbook.md) ·
+[Возможности UI](ui/README.md) ·
+[Контракт графа 0.2](docs/pipeline-backend-json-format.md).
+Выполнение Python и реальные логи требуют будущей backend-интеграции.
+
 ## Локальный запуск (minikube)
 
 Требуется: [minikube](https://minikube.sigs.k8s.io/docs/start/), `kubectl`, `helm`, драйвер docker.
@@ -151,7 +164,10 @@ typespec/main.tsp  ──(tsp compile)──▶  api/openapi.yaml  ──(oapi-c
 3. `make api` — перегенерировать OpenAPI и Go-код.
 4. Реализовать сгенерированный интерфейс `StrictServerInterface` в хендлере `internal/api/`.
 
-Коммитить вместе три файла: `typespec/main.tsp`, `api/openapi.yaml`, `internal/api/gen/api.gen.go`.
+Полная backend-интеграция включает три файла: `typespec/main.tsp`,
+`api/openapi.yaml`, `internal/api/gen/api.gen.go`. Для текущего frontend-этапа
+обновляются общий TypeSpec/OpenAPI-контракт и frontend-модели; перегенерация
+серверного Go-кода и реализация исполнения остаются задачами backend-команды.
 
 ## Жизненный цикл запуска pipeline
 

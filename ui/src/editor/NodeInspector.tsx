@@ -1,3 +1,8 @@
+import { PythonEnvironmentEditor } from './PythonEnvironmentEditor';
+import { PortsEditor } from './PortsEditor';
+import { lazy, Suspense } from 'react';
+import { NodeLogsPanel } from './NodeLogsPanel';
+import type { PipelineRepository } from '../repository/PipelineRepository';
 import {
   Alert,
   Box,
@@ -19,8 +24,14 @@ import type {
   ConfigPropertySchema,
   NodeTypeDefinition,
   PipelineNode,
+  PortDefinition,
+  PythonImplementation,
   ValidationIssue,
 } from '../domain/pipeline';
+
+const PythonEditor = lazy(() =>
+  import('./PythonEditor').then((module) => ({ default: module.PythonEditor })),
+);
 
 interface NodeInspectorProps {
   mode: InspectorMode;
@@ -30,12 +41,23 @@ interface NodeInspectorProps {
   allIssues: ValidationIssue[];
   onTitleChange: (title: string) => void;
   onConfigChange: (name: string, value: unknown) => void;
+  repository: PipelineRepository;
+  logsAvailable?: boolean;
+  onCodeChange: (code: string) => void;
+  onEnvironmentChange: (
+    patch: Pick<PythonImplementation, 'pythonVersion' | 'requirements'>,
+  ) => void;
+  onPortsChange: (
+    direction: 'inputs' | 'outputs',
+    ports: PortDefinition[],
+    renamed: Record<string, string>,
+  ) => void;
   onDelete: () => void;
   onModeChange: (mode: InspectorMode) => void;
   onIssueClick: (issue: ValidationIssue) => void;
 }
 
-export type InspectorMode = 'settings' | 'issues';
+export type InspectorMode = 'settings' | 'issues' | 'logs';
 
 function fieldValue(value: unknown): string | number {
   if (typeof value === 'number' || typeof value === 'string') return value;
@@ -120,6 +142,11 @@ export function NodeInspector({
   onTitleChange,
   onConfigChange,
   onDelete,
+  onCodeChange,
+  onEnvironmentChange,
+  onPortsChange,
+  repository,
+  logsAvailable = true,
   onModeChange,
   onIssueClick,
 }: NodeInspectorProps) {
@@ -148,6 +175,7 @@ export function NodeInspector({
         sx={{ minHeight: 56 }}
       >
         <Tab value="settings" label="Настройки" />
+        <Tab value="logs" label="Логи" />
         <Tab
           value="issues"
           label={`Проблемы${allIssues.length ? ` · ${allIssues.length}` : ''}`}
@@ -201,15 +229,26 @@ export function NodeInspector({
                         {locationLabel(current)}
                       </Typography>
                     </Stack>
-                    <Typography variant="body2">
-                      {current.message}
-                    </Typography>
+                    <Typography variant="body2">{current.message}</Typography>
                   </Stack>
                 </ButtonBase>
               ))}
             </>
           )}
         </Stack>
+      ) : mode === 'logs' && node ? (
+        logsAvailable ? (
+          <NodeLogsPanel
+            key={node.id}
+            nodeId={node.id}
+            repository={repository}
+          />
+        ) : (
+          <Alert severity="info" sx={{ m: 2 }}>
+            Просмотр логов HTTP API пока не подключён. Демонстрационные логи
+            доступны в локальном редакторе.
+          </Alert>
+        )
       ) : !node ? (
         <Stack spacing={1.5} sx={{ p: 2 }}>
           <Alert severity="info" variant="outlined">
@@ -244,12 +283,49 @@ export function NodeInspector({
             </Typography>
           </Box>
 
+          {nodeType?.editablePorts && (
+            <>
+              <PortsEditor
+                direction="inputs"
+                ports={nodeType.inputs}
+                onSave={(ports, renamed) =>
+                  onPortsChange('inputs', ports, renamed)
+                }
+              />
+              <PortsEditor
+                direction="outputs"
+                ports={nodeType.outputs}
+                returnInputs={
+                  node.type === 'builtin.return' ? nodeType.inputs : undefined
+                }
+                onSave={(ports, renamed) =>
+                  onPortsChange('outputs', ports, renamed)
+                }
+              />
+            </>
+          )}
+          {node.type === 'builtin.python' && (
+            <PythonEnvironmentEditor
+              key={node.id}
+              implementation={node.implementation}
+              onChange={onEnvironmentChange}
+            />
+          )}
+          {node.type === 'builtin.python' && (
+            <Suspense fallback={<Typography>Загрузка редактора…</Typography>}>
+              <PythonEditor
+                key={node.id}
+                code={node.implementation?.code ?? ''}
+                onChange={onCodeChange}
+              />
+            </Suspense>
+          )}
+
           {nodeType &&
             Object.entries(nodeType.configSchema.properties).map(
               ([name, schema]) => {
                 const fieldIssue = issues.find(
-                  (current) =>
-                    current.location.configPath === `/${name}`,
+                  (current) => current.location.configPath === `/${name}`,
                 );
                 return (
                   <ConfigField
@@ -266,9 +342,7 @@ export function NodeInspector({
 
           {issues.length > 0 && (
             <Stack spacing={1}>
-              <Typography variant="subtitle2">
-                Ошибки узла
-              </Typography>
+              <Typography variant="subtitle2">Ошибки узла</Typography>
               {issues.map((current, index) => (
                 <Alert
                   key={`${current.code}-${index}`}
@@ -295,4 +369,3 @@ export function NodeInspector({
     </Box>
   );
 }
-

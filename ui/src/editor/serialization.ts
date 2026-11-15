@@ -17,9 +17,16 @@ function serializeNode(node: PipelineNode): PipelineNode {
     typeVersion: node.typeVersion,
     ...(node.title === undefined ? {} : { title: node.title }),
     config: cloneRecord(node.config),
-    ...(node.ui === undefined
+    ...(node.inputs === undefined
       ? {}
-      : { ui: cloneRecord(node.ui) as NodeUi }),
+      : { inputs: structuredClone(node.inputs) }),
+    ...(node.outputs === undefined
+      ? {}
+      : { outputs: structuredClone(node.outputs) }),
+    ...(node.implementation === undefined
+      ? {}
+      : { implementation: structuredClone(node.implementation) }),
+    ...(node.ui === undefined ? {} : { ui: cloneRecord(node.ui) as NodeUi }),
   };
 }
 
@@ -55,4 +62,3 @@ export function serializeDefinition(
 export function toBackendJson(definition: PipelineDefinition): string {
   return JSON.stringify(serializeDefinition(definition), null, 2);
 }
-

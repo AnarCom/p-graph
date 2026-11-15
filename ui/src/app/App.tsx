@@ -1,3 +1,4 @@
+import { resolveNodeType } from '../editor/nodePorts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -22,21 +23,15 @@ import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import ScienceRoundedIcon from '@mui/icons-material/ScienceRounded';
-import {
-  GraphCanvas,
-  type NodeFocusRequest,
-} from '../editor/GraphCanvas';
+import { GraphCanvas, type NodeFocusRequest } from '../editor/GraphCanvas';
 import { JsonPreviewDialog } from '../editor/JsonPreviewDialog';
-import {
-  NodeInspector,
-  type InspectorMode,
-} from '../editor/NodeInspector';
+import { NodeInspector, type InspectorMode } from '../editor/NodeInspector';
 import { NodePalette } from '../editor/NodePalette';
 import { serializeDefinition, toBackendJson } from '../editor/serialization';
 import { useEditorStore } from '../editor/store';
 import { localPipelineRepository } from '../repository/LocalPipelineRepository';
-
-const pipelineId = '20000000-0000-4000-8000-000000000000';
+import { httpPipelineRepository } from '../repository/HttpPipelineRepository';
+import { controlFlowDraft } from '../mocks/controlFlowDraft';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -46,6 +41,17 @@ interface ToastState {
 }
 
 export function App() {
+  const isControlExample =
+    new URLSearchParams(window.location.search).get('example') === 'control';
+  const isMock =
+    isControlExample ||
+    new URLSearchParams(window.location.search).get('mock') === 'true';
+  const repository = isMock ? localPipelineRepository : httpPipelineRepository;
+  const pipelineId = isControlExample
+    ? controlFlowDraft.pipelineId
+    : isMock
+      ? 'pipeline-print-file'
+      : '20000000-0000-4000-8000-000000000000';
   const definition = useEditorStore((state) => state.definition);
   const catalog = useEditorStore((state) => state.catalog);
   const selectedNodeId = useEditorStore((state) => state.selectedNodeId);
@@ -55,6 +61,11 @@ export function App() {
   const addNode = useEditorStore((state) => state.addNode);
   const updateNodeTitle = useEditorStore((state) => state.updateNodeTitle);
   const updateNodeConfig = useEditorStore((state) => state.updateNodeConfig);
+  const updateNodePorts = useEditorStore((state) => state.updateNodePorts);
+  const updateNodeEnvironment = useEditorStore(
+    (state) => state.updateNodeEnvironment,
+  );
+  const updateNodeCode = useEditorStore((state) => state.updateNodeCode);
   const removeNode = useEditorStore((state) => state.removeNode);
   const setIssues = useEditorStore((state) => state.setIssues);
   const markSaved = useEditorStore((state) => state.markSaved);
@@ -66,25 +77,24 @@ export function App() {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [inspectorMode, setInspectorMode] =
-    useState<InspectorMode>('settings');
-  const [focusRequest, setFocusRequest] =
-    useState<NodeFocusRequest | null>(null);
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>('settings');
+  const [focusRequest, setFocusRequest] = useState<NodeFocusRequest | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
 
-    Promise.all([
-      localPipelineRepository.getDraft(pipelineId),
-      localPipelineRepository.getNodeCatalog(),
-    ])
+    Promise.all([repository.getDraft(pipelineId), repository.getNodeCatalog()])
       .then(([draft, nextCatalog]) => {
         if (active) hydrate(draft.definition, nextCatalog);
       })
       .catch((error: unknown) => {
         if (active) {
           setLoadError(
-            error instanceof Error ? error.message : 'Не удалось загрузить mock',
+            error instanceof Error
+              ? error.message
+              : 'Не удалось загрузить pipeline',
           );
         }
       })
@@ -95,7 +105,7 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [hydrate]);
+  }, [hydrate, pipelineId, repository]);
 
   useEffect(() => {
     if (dirty) setSaveStatus('idle');
@@ -104,11 +114,10 @@ export function App() {
   const selectedNode = definition?.nodes.find(
     (node) => node.id === selectedNodeId,
   );
-  const selectedNodeType = catalog?.nodeTypes.find(
-    (nodeType) =>
-      nodeType.type === selectedNode?.type &&
-      nodeType.version === selectedNode.typeVersion,
-  );
+  const selectedNodeType =
+    catalog && selectedNode
+      ? resolveNodeType(catalog, selectedNode)
+      : undefined;
   const selectedIssues = issues.filter(
     (current) => current.location.nodeId === selectedNodeId,
   );
@@ -123,24 +132,28 @@ export function App() {
     setSaveStatus('saving');
 
     try {
-      await localPipelineRepository.saveDraft({
+      await repository.saveDraft({
         pipelineId,
         baseRevision: null,
         definition: serializeDefinition(definition),
       });
       markSaved();
       setSaveStatus('saved');
-      setToast({ message: 'Черновик сохранён в localStorage' });
+      setToast({
+        message: isMock
+          ? 'Черновик сохранён в localStorage'
+          : 'Черновик сохранён на сервере',
+      });
     } catch {
       setSaveStatus('error');
       setToast({ message: 'Не удалось сохранить черновик' });
     }
-  }, [definition, markSaved]);
+  }, [definition, markSaved, pipelineId, repository, isMock]);
 
   const validate = useCallback(async () => {
     if (!definition) return;
 
-    const result = await localPipelineRepository.validateDraft({
+    const result = await repository.validateDraft({
       pipelineId,
       baseRevision: null,
       definition,
@@ -153,29 +166,29 @@ export function App() {
         : `Найдено проблем: ${result.issues.length}`,
       opensIssues: !result.valid,
     });
-  }, [definition, setIssues]);
+  }, [definition, setIssues, pipelineId, repository]);
 
   const reset = useCallback(async () => {
     const [draft, nextCatalog] = await Promise.all([
-      localPipelineRepository.resetDraft(pipelineId),
-      localPipelineRepository.getNodeCatalog(),
+      repository.resetDraft(pipelineId),
+      repository.getNodeCatalog(),
     ]);
     hydrate(draft.definition, nextCatalog);
     setResetOpen(false);
     setSaveStatus('idle');
     setInspectorMode('settings');
     setFocusRequest(null);
-    setToast({ message: 'Демо-граф восстановлен' });
-  }, [hydrate]);
+    setToast({
+      message: isMock ? 'Демо-граф восстановлен' : 'Черновик сброшен',
+    });
+  }, [hydrate, pipelineId, repository, isMock]);
 
   if (loading) {
     return (
       <Box className="center-screen">
         <Stack spacing={2} sx={{ alignItems: 'center' }}>
           <CircularProgress />
-          <Typography color="text.secondary">
-            Загружаем mock pipeline…
-          </Typography>
+          <Typography color="text.secondary">Загружаем pipeline…</Typography>
         </Stack>
       </Box>
     );
@@ -184,7 +197,14 @@ export function App() {
   if (loadError || !definition || !catalog) {
     return (
       <Box className="center-screen">
-        <Alert severity="error">{loadError ?? 'Нет данных редактора'}</Alert>
+        <Stack spacing={2}>
+          <Alert severity="error">{loadError ?? 'Нет данных редактора'}</Alert>
+          {!isMock && (
+            <Button variant="outlined" component="a" href="?mock=true">
+              Открыть локальный редактор
+            </Button>
+          )}
+        </Stack>
       </Box>
     );
   }
@@ -221,13 +241,15 @@ export function App() {
               p-graph
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Прочитать и напечатать файл
+              {isControlExample
+                ? 'Пример: сигнал control'
+                : 'Редактор pipeline'}
             </Typography>
           </Box>
 
           <Chip
             icon={<ScienceRoundedIcon />}
-            label="Mock backend"
+            label={isMock ? 'Mock backend' : 'HTTP API'}
             size="small"
             color="secondary"
             variant="outlined"
@@ -235,6 +257,29 @@ export function App() {
           />
 
           <Box sx={{ flex: 1 }} />
+
+          {!isMock && (
+            <Button
+              color="inherit"
+              component="a"
+              href="?mock=true"
+              target="_blank"
+              rel="noopener"
+            >
+              Локальный редактор
+            </Button>
+          )}
+          {!isControlExample && (
+            <Button
+              color="inherit"
+              component="a"
+              href="?example=control"
+              target="_blank"
+              rel="noopener"
+            >
+              Пример control
+            </Button>
+          )}
 
           <Chip
             size="small"
@@ -247,12 +292,20 @@ export function App() {
                 : dirty
                   ? 'Есть изменения'
                   : saveStatus === 'saved'
-                    ? 'Сохранено локально'
+                    ? isMock
+                      ? 'Сохранено локально'
+                      : 'Сохранено на сервере'
                     : 'Черновик загружен'
             }
           />
 
-          <Tooltip title="Вернуть исходный демонстрационный граф">
+          <Tooltip
+            title={
+              isMock
+                ? 'Вернуть исходный демонстрационный граф'
+                : 'Сбросить черновик на сервере'
+            }
+          >
             <Button
               color="inherit"
               startIcon={<RestartAltRoundedIcon />}
@@ -286,6 +339,21 @@ export function App() {
         </Toolbar>
       </AppBar>
 
+      {!isMock && definition.schemaVersion !== '0.2' && (
+        <Alert severity="info">
+          Для Python-кубиков и редактируемых портов формата 0.2 откройте
+          «Локальный редактор». Текущий граф сервера сохраняет свой формат.
+        </Alert>
+      )}
+      {isControlExample && (
+        <Alert severity="info">
+          Пример control: «Напечатать текст» отправляет сигнал done → printed.
+          Кубик «После вывода в консоль» зависит от завершения печати, без
+          передачи текста по этой стрелке. Пример сохраняется отдельно от
+          основного графа; выполнение и логи пока демонстрационные.
+        </Alert>
+      )}
+
       <Box className="editor-layout">
         <NodePalette
           nodeTypes={catalog.nodeTypes}
@@ -314,6 +382,18 @@ export function App() {
         </Box>
 
         <NodeInspector
+          repository={repository}
+          logsAvailable={isMock}
+          onEnvironmentChange={(patch) => {
+            if (selectedNodeId) updateNodeEnvironment(selectedNodeId, patch);
+          }}
+          onCodeChange={(code) => {
+            if (selectedNodeId) updateNodeCode(selectedNodeId, code);
+          }}
+          onPortsChange={(direction, ports, renamed) => {
+            if (selectedNodeId)
+              updateNodePorts(selectedNodeId, direction, ports, renamed);
+          }}
           mode={inspectorMode}
           node={selectedNode}
           nodeType={selectedNodeType}
@@ -359,10 +439,15 @@ export function App() {
       />
 
       <Dialog open={resetOpen} onClose={() => setResetOpen(false)}>
-        <DialogTitle>Сбросить локальный черновик?</DialogTitle>
+        <DialogTitle>
+          {isMock
+            ? 'Сбросить локальный черновик?'
+            : 'Сбросить черновик на сервере?'}
+        </DialogTitle>
         <DialogContent>
-          Текущие изменения будут удалены из localStorage, после чего откроется
-          исходный демонстрационный pipeline.
+          {isMock
+            ? 'Текущие изменения будут удалены из localStorage, после чего откроется исходный демонстрационный pipeline.'
+            : 'Черновик на сервере будет сброшен. Текущие изменения будут потеряны.'}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResetOpen(false)}>Отмена</Button>
@@ -375,7 +460,9 @@ export function App() {
       <Snackbar
         open={Boolean(toast)}
         autoHideDuration={3200}
-        onClose={() => setToast(null)}
+        onClose={(_, reason) => {
+          if (reason !== 'clickaway') setToast(null);
+        }}
         message={toast?.message}
         onClick={() => {
           if (toast?.opensIssues) setInspectorMode('issues');
@@ -396,4 +483,3 @@ export function App() {
     </Box>
   );
 }
-

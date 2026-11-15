@@ -11,6 +11,7 @@ import {
   Controls,
   MarkerType,
   MiniMap,
+  Panel,
   ReactFlow,
   type Connection,
   type Edge,
@@ -19,15 +20,14 @@ import {
   type NodeChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
+import { Button, Paper, Stack, Typography } from '@mui/material';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import '@xyflow/react/dist/style.css';
-import type { NodeTypeDefinition } from '../domain/pipeline';
+import { resolveNodeType } from './nodePorts';
+import { canConnect } from './connections';
 import { useEditorStore } from './store';
-import {
-  PipelineNodeView,
-  type PipelineFlowNode,
-} from './PipelineNodeView';
+import { PipelineNodeView, type PipelineFlowNode } from './PipelineNodeView';
 import { decodeNodeTypeDrag, nodeTypeDragMime } from './paletteDrag';
-import { arePortTypesCompatible } from './portCompatibility';
 
 const nodeTypes = {
   pipeline: PipelineNodeView,
@@ -36,16 +36,6 @@ const nodeTypes = {
 function handlePort(handleId: string | null | undefined): string | null {
   if (!handleId) return null;
   return handleId.split(':').slice(1).join(':') || null;
-}
-
-function findNodeType(
-  catalog: ReturnType<typeof useEditorStore.getState>['catalog'],
-  type: string,
-  version: number,
-): NodeTypeDefinition | undefined {
-  return catalog?.nodeTypes.find(
-    (candidate) => candidate.type === type && candidate.version === version,
-  );
 }
 
 interface GraphCanvasProps {
@@ -70,6 +60,8 @@ export function GraphCanvas({
   const definition = useEditorStore((state) => state.definition);
   const catalog = useEditorStore((state) => state.catalog);
   const selectedNodeId = useEditorStore((state) => state.selectedNodeId);
+  const selectedEdgeId = useEditorStore((state) => state.selectedEdgeId);
+  const selectEdge = useEditorStore((state) => state.selectEdge);
   const issues = useEditorStore((state) => state.issues);
   const selectNode = useEditorStore((state) => state.selectNode);
   const addNode = useEditorStore((state) => state.addNode);
@@ -105,7 +97,7 @@ export function GraphCanvas({
         selected: selectedNodeId === node.id,
         data: {
           node,
-          nodeType: findNodeType(catalog, node.type, node.typeVersion),
+          nodeType: catalog ? resolveNodeType(catalog, node) : undefined,
           issues: issues.filter(
             (current) => current.location.nodeId === node.id,
           ),
@@ -118,6 +110,9 @@ export function GraphCanvas({
     () =>
       (definition?.edges ?? []).map((edge) => ({
         id: edge.id,
+        selected: selectedEdgeId === edge.id,
+        interactionWidth: 28,
+        ariaLabel: `Стрелка ${edge.source.nodeId}.${edge.source.port} → ${edge.target.nodeId}.${edge.target.port}`,
         source: edge.source.nodeId,
         sourceHandle: `output:${edge.source.port}`,
         target: edge.target.nodeId,
@@ -131,64 +126,30 @@ export function GraphCanvas({
           color: '#8b5cf6',
         },
         style: {
-          stroke: issues.some(
-            (current) => current.location.edgeId === edge.id,
-          )
+          stroke: issues.some((current) => current.location.edgeId === edge.id)
             ? '#fb7185'
             : '#8b5cf6',
           strokeWidth: 2,
         },
       })),
-    [definition?.edges, issues],
+    [definition?.edges, issues, selectedEdgeId],
   );
 
   const isValidConnection = useCallback<IsValidConnection>(
     (connection) => {
       if (!definition || !catalog) return false;
-      if (!connection.source || !connection.target) return false;
-      if (connection.source === connection.target) return false;
-
-      const sourceNode = definition.nodes.find(
-        (node) => node.id === connection.source,
-      );
-      const targetNode = definition.nodes.find(
-        (node) => node.id === connection.target,
-      );
-      if (!sourceNode || !targetNode) return false;
-
-      const sourceType = findNodeType(
-        catalog,
-        sourceNode.type,
-        sourceNode.typeVersion,
-      );
-      const targetType = findNodeType(
-        catalog,
-        targetNode.type,
-        targetNode.typeVersion,
-      );
-      const sourcePortName = handlePort(connection.sourceHandle);
-      const targetPortName = handlePort(connection.targetHandle);
-      const sourcePort = sourceType?.outputs.find(
-        (port) => port.name === sourcePortName,
-      );
-      const targetPort = targetType?.inputs.find(
-        (port) => port.name === targetPortName,
-      );
-      if (!sourcePort || !targetPort) return false;
-      if (!arePortTypesCompatible(sourcePort.dataType, targetPort.dataType)) {
+      if (
+        !connection.sourceHandle?.startsWith('output:') ||
+        !connection.targetHandle?.startsWith('input:')
+      )
         return false;
-      }
-
-      const incomingCount = definition.edges.filter(
-        (edge) =>
-          edge.target.nodeId === connection.target &&
-          edge.target.port === targetPortName,
-      ).length;
-
-      return (
-        targetPort.maxConnections === null ||
-        targetPort.maxConnections === undefined ||
-        incomingCount < targetPort.maxConnections
+      return canConnect(
+        definition,
+        catalog,
+        connection.source,
+        handlePort(connection.sourceHandle) ?? '',
+        connection.target,
+        handlePort(connection.targetHandle) ?? '',
       );
     },
     [catalog, definition],
@@ -203,18 +164,8 @@ export function GraphCanvas({
 
       const sourcePort = handlePort(connection.sourceHandle);
       const targetPort = handlePort(connection.targetHandle);
-      if (
-        connection.source &&
-        connection.target &&
-        sourcePort &&
-        targetPort
-      ) {
-        connect(
-          connection.source,
-          sourcePort,
-          connection.target,
-          targetPort,
-        );
+      if (connection.source && connection.target && sourcePort && targetPort) {
+        connect(connection.source, sourcePort, connection.target, targetPort);
       }
     },
     [connect, isValidConnection, onInvalidConnection],
@@ -237,9 +188,10 @@ export function GraphCanvas({
     (changes: EdgeChange[]) => {
       for (const change of changes) {
         if (change.type === 'remove') removeEdge(change.id);
+        if (change.type === 'select' && change.selected) selectEdge(change.id);
       }
     },
-    [removeEdge],
+    [removeEdge, selectEdge],
   );
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -281,13 +233,12 @@ export function GraphCanvas({
   );
 
   if (!definition) return null;
+  const selectedEdge = definition.edges.find(
+    (edge) => edge.id === selectedEdgeId,
+  );
 
   return (
-    <div
-      className="graph-drop-zone"
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+    <div className="graph-drop-zone" onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow<PipelineFlowNode, Edge>
         nodes={nodes}
         edges={edges}
@@ -297,6 +248,7 @@ export function GraphCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValidConnection}
+        onEdgeClick={(_, edge) => selectEdge(edge.id)}
         onNodeClick={(_, node) => {
           selectNode(node.id);
           onOpenSettings();
@@ -313,6 +265,28 @@ export function GraphCanvas({
         snapGrid={[16, 16]}
         colorMode="dark"
       >
+        {selectedEdge && (
+          <Panel position="top-center">
+            <Paper elevation={6} sx={{ p: 1.5, maxWidth: 440 }}>
+              <Stack spacing={1}>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  {selectedEdge.source.port} → {selectedEdge.target.port}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlineRoundedIcon />}
+                  onClick={() => removeEdge(selectedEdge.id)}
+                >
+                  Удалить стрелку
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Также можно нажать Delete или Backspace
+                </Typography>
+              </Stack>
+            </Paper>
+          </Panel>
+        )}
         <Background
           variant={BackgroundVariant.Dots}
           gap={24}
@@ -331,4 +305,3 @@ export function GraphCanvas({
     </div>
   );
 }
-

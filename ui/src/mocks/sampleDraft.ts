@@ -4,8 +4,8 @@ export const sampleDraft: PipelineDraft = {
   pipelineId: 'pipeline-print-file',
   baseRevision: null,
   definition: {
-    schemaVersion: '0.1',
-    nodeCatalogVersion: '0.1',
+    schemaVersion: '0.2',
+    nodeCatalogVersion: '0.2',
     inputs: {
       sourceFile: {
         type: 'artifact.file',
@@ -27,12 +27,27 @@ export const sampleDraft: PipelineDraft = {
         },
       },
       {
-        id: 'read-file',
-        type: 'builtin.read-file',
+        id: 'python-read',
+        type: 'builtin.python',
         typeVersion: 1,
-        title: 'Прочитать файл',
-        config: {
-          encoding: 'utf-8',
+        title: 'Обработать файл',
+        config: {},
+        inputs: [
+          {
+            name: 'file',
+            title: 'Файл',
+            dataType: 'artifact.file',
+            minConnections: 1,
+            maxConnections: 1,
+          },
+        ],
+        outputs: [{ name: 'text', title: 'Текст', dataType: 'text' }],
+        implementation: {
+          language: 'python',
+          entrypoint: 'run',
+          pythonVersion: '3.12',
+          requirements: [],
+          code: 'def run(inputs):\n    # Runner передаст artifact.file как локальный путь\n    with open(inputs["file"], encoding="utf-8") as source:\n        text = source.read()\n    print(f"Прочитано символов: {len(text)}")\n    return {"text": text}\n',
         },
         ui: {
           position: { x: 380, y: 180 },
@@ -41,7 +56,7 @@ export const sampleDraft: PipelineDraft = {
       {
         id: 'print-text',
         type: 'builtin.console-print',
-        typeVersion: 1,
+        typeVersion: 2,
         title: 'Вывести в консоль',
         config: {
           prefix: '',
@@ -51,11 +66,28 @@ export const sampleDraft: PipelineDraft = {
         },
       },
       {
-        id: 'end',
-        type: 'builtin.end',
+        id: 'return',
+        type: 'builtin.return',
         typeVersion: 1,
-        title: 'Конец',
+        title: 'return',
         config: {},
+        inputs: [
+          {
+            name: 'in',
+            title: 'Вход',
+            dataType: 'any',
+            minConnections: 1,
+            maxConnections: null,
+          },
+        ],
+        outputs: [
+          {
+            name: 'result',
+            title: 'Результат',
+            dataType: 'any',
+            sourcePort: 'in',
+          },
+        ],
         ui: {
           position: { x: 980, y: 180 },
         },
@@ -65,17 +97,17 @@ export const sampleDraft: PipelineDraft = {
       {
         id: 'edge-input-read',
         source: { nodeId: 'input-file', port: 'file' },
-        target: { nodeId: 'read-file', port: 'file' },
+        target: { nodeId: 'python-read', port: 'file' },
       },
       {
         id: 'edge-read-print',
-        source: { nodeId: 'read-file', port: 'text' },
+        source: { nodeId: 'python-read', port: 'text' },
         target: { nodeId: 'print-text', port: 'text' },
       },
       {
         id: 'edge-print-end',
         source: { nodeId: 'print-text', port: 'done' },
-        target: { nodeId: 'end', port: 'in' },
+        target: { nodeId: 'return', port: 'in' },
       },
     ],
     ui: {
@@ -83,4 +115,3 @@ export const sampleDraft: PipelineDraft = {
     },
   },
 };
-

@@ -1,3 +1,6 @@
+import "./python.tsp";
+import "./node-catalog.tsp";
+
 namespace PGraph {
   model PipelineInput {
     type: string;
@@ -28,6 +31,9 @@ namespace PGraph {
     typeVersion: int32;
     title?: string;
     config: Record<unknown>;
+    inputs?: InputPortDefinition[];
+    outputs?: OutputPortDefinition[];
+    implementation?: PythonImplementation;
     ui?: NodeUi;
   }
 

@@ -8,15 +8,13 @@ import {
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import type { NodeTypeDefinition } from '../domain/pipeline';
-import {
-  encodeNodeTypeDrag,
-  nodeTypeDragMime,
-} from './paletteDrag';
+import { encodeNodeTypeDrag, nodeTypeDragMime } from './paletteDrag';
 
 const categoryNames: Record<string, string> = {
   files: 'Файлы',
   text: 'Текст',
   flow: 'Управление',
+  code: 'Свои кубики',
 };
 
 interface NodePaletteProps {
@@ -47,6 +45,14 @@ export function NodePalette({ nodeTypes, onAdd }: NodePaletteProps) {
         </Typography>
         <Typography variant="body2" sx={{ mt: 0.25 }}>
           Кликните или перетащите на canvas
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 1 }}
+        >
+          Из одного выхода можно провести стрелки к нескольким входам — для
+          параллельных веток обработки.
         </Typography>
       </Box>
       <Divider />
@@ -145,4 +151,3 @@ export function NodePalette({ nodeTypes, onAdd }: NodePaletteProps) {
     </Box>
   );
 }
-

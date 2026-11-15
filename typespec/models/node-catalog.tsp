@@ -1,3 +1,5 @@
+import "./python.tsp";
+
 namespace PGraph {
   union NodeTypeStatus {
     "active",
@@ -17,6 +19,7 @@ namespace PGraph {
     name: string;
     title: string;
     dataType: string;
+    sourcePort?: string;
   }
 
   union ConfigValueType {
@@ -52,6 +55,8 @@ namespace PGraph {
     inputs: InputPortDefinition[];
     outputs: OutputPortDefinition[];
     configSchema: ConfigSchema;
+    editablePorts?: boolean;
+    implementation?: PythonImplementation;
   }
 
   model NodeCatalog {

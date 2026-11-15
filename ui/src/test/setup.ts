@@ -29,3 +29,10 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
+// jsdom has no CSS transform matrix; React Flow reads its zoom component.
+Object.defineProperty(window, 'DOMMatrixReadOnly', {
+  configurable: true,
+  value: class {
+    m22 = 1;
+  },
+});

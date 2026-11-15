@@ -1,3 +1,4 @@
+import { pythonEnvironmentIssues } from './pythonEnvironment';
 import type {
   ConfigPropertySchema,
   NodeCatalog,
@@ -7,6 +8,7 @@ import type {
   ValidationIssue,
   ValidationResult,
 } from '../domain/pipeline';
+import { resolveNodeType, validPortDefinitions } from './nodePorts';
 import { arePortTypesCompatible } from './portCompatibility';
 
 function issue(
@@ -17,20 +19,7 @@ function issue(
   return { code, message, location };
 }
 
-function findType(
-  catalog: NodeCatalog,
-  node: PipelineNode,
-): NodeTypeDefinition | undefined {
-  return catalog.nodeTypes.find(
-    (candidate) =>
-      candidate.type === node.type && candidate.version === node.typeVersion,
-  );
-}
-
-function valueMatches(
-  value: unknown,
-  property: ConfigPropertySchema,
-): boolean {
+function valueMatches(value: unknown, property: ConfigPropertySchema): boolean {
   if (property.type === 'integer') {
     return typeof value === 'number' && Number.isInteger(value);
   }
@@ -81,22 +70,30 @@ function validateConfig(
 
     if (!valueMatches(value, property)) {
       issues.push(
-        issue('INVALID_CONFIG_TYPE', `Неверный тип поля «${property.title ?? name}»`, {
-          kind: 'config',
-          nodeId: node.id,
-          configPath: `/${name}`,
-        }),
+        issue(
+          'INVALID_CONFIG_TYPE',
+          `Неверный тип поля «${property.title ?? name}»`,
+          {
+            kind: 'config',
+            nodeId: node.id,
+            configPath: `/${name}`,
+          },
+        ),
       );
       continue;
     }
 
     if (property.enum && !property.enum.includes(value as never)) {
       issues.push(
-        issue('INVALID_CONFIG_VALUE', `Недопустимое значение поля «${property.title ?? name}»`, {
-          kind: 'config',
-          nodeId: node.id,
-          configPath: `/${name}`,
-        }),
+        issue(
+          'INVALID_CONFIG_VALUE',
+          `Недопустимое значение поля «${property.title ?? name}»`,
+          {
+            kind: 'config',
+            nodeId: node.id,
+            configPath: `/${name}`,
+          },
+        ),
       );
     }
   }
@@ -134,10 +131,10 @@ function hasCycle(definition: PipelineDefinition): boolean {
   return definition.nodes.some((node) => visit(node.id));
 }
 
-function nodesWithoutPathToEnd(definition: PipelineDefinition): string[] {
+function nodesWithoutPathToReturn(definition: PipelineDefinition): string[] {
   const endIds = new Set(
     definition.nodes
-      .filter((node) => node.type === 'builtin.end')
+      .filter((node) => node.type === 'builtin.return')
       .map((node) => node.id),
   );
   const adjacency = new Map<string, string[]>();
@@ -172,9 +169,22 @@ export function validateDefinition(
   catalog: NodeCatalog,
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
+  if (
+    definition.schemaVersion !== '0.2' ||
+    definition.nodeCatalogVersion !== catalog.catalogVersion
+  ) {
+    issues.push(
+      issue(
+        'UNSUPPORTED_VERSION',
+        'Обновите формат черновика до 0.2 перед проверкой запуска',
+        { kind: 'graph' },
+      ),
+    );
+  }
   const nodeById = new Map(definition.nodes.map((node) => [node.id, node]));
   const nodeIds = new Set<string>();
   const edgeIds = new Set<string>();
+  const endpoints = new Set<string>();
 
   for (const node of definition.nodes) {
     if (nodeIds.has(node.id)) {
@@ -187,7 +197,7 @@ export function validateDefinition(
     }
     nodeIds.add(node.id);
 
-    const nodeType = findType(catalog, node);
+    const nodeType = resolveNodeType(catalog, node);
     if (!nodeType) {
       issues.push(
         issue(
@@ -209,6 +219,106 @@ export function validateDefinition(
     }
 
     issues.push(...validateConfig(node, nodeType));
+    if (
+      !validPortDefinitions(nodeType.inputs, true) ||
+      !validPortDefinitions(nodeType.outputs, false)
+    ) {
+      issues.push(
+        issue(
+          'INVALID_PORT_DEFINITION',
+          'Проверьте имена, типы и ограничения портов',
+          { kind: 'node', nodeId: node.id },
+        ),
+      );
+    }
+    if (
+      !nodeType.editablePorts &&
+      (node.inputs !== undefined || node.outputs !== undefined)
+    ) {
+      issues.push(
+        issue('FIXED_PORT_OVERRIDE', 'Порты этого типа фиксированы каталогом', {
+          kind: 'node',
+          nodeId: node.id,
+        }),
+      );
+    }
+    if (node.type === 'builtin.python') {
+      issues.push(
+        ...pythonEnvironmentIssues(node.implementation).map((current) =>
+          issue(current.code, current.message, {
+            kind: 'node',
+            nodeId: node.id,
+          }),
+        ),
+      );
+      if (
+        node.implementation?.language !== 'python' ||
+        node.implementation.entrypoint !== 'run' ||
+        !node.implementation.code.trim()
+      ) {
+        issues.push(
+          issue(
+            'MISSING_PYTHON_CODE',
+            'Добавьте Python-код с функцией run(inputs)',
+            { kind: 'node', nodeId: node.id },
+          ),
+        );
+      }
+    } else if (node.implementation) {
+      issues.push(
+        issue(
+          'UNEXPECTED_IMPLEMENTATION',
+          'Python-код доступен только Python-кубикам',
+          { kind: 'node', nodeId: node.id },
+        ),
+      );
+    }
+    if (
+      node.type !== 'builtin.return' &&
+      nodeType.outputs.some((port) => port.dataType === 'any')
+    ) {
+      issues.push(
+        issue(
+          'INVALID_OUTPUT_TYPE',
+          'Укажите конкретный тип выхода Python-кубика',
+          { kind: 'node', nodeId: node.id },
+        ),
+      );
+    }
+    if (node.type === 'builtin.return') {
+      for (const port of nodeType.outputs) {
+        const input = nodeType.inputs.find(
+          (input) => input.name === port.sourcePort,
+        );
+        if (!input || input.dataType !== port.dataType) {
+          issues.push(
+            issue(
+              'INVALID_RETURN_OUTPUT',
+              `Для результата «${port.title}» выберите вход-источник с тем же типом`,
+              { kind: 'port', nodeId: node.id, port: port.name },
+            ),
+          );
+        }
+      }
+      if (!definition.edges.some((edge) => edge.target.nodeId === node.id)) {
+        issues.push(
+          issue(
+            'MISSING_RETURN_CONNECTION',
+            'Подключите хотя бы один вход return',
+            { kind: 'node', nodeId: node.id },
+          ),
+        );
+      }
+      if (definition.edges.some((edge) => edge.source.nodeId === node.id)) {
+        issues.push(
+          issue(
+            'RETURN_OUTGOING_EDGE',
+            'Выходы return являются результатами pipeline и не соединяются с другими кубиками',
+            { kind: 'node', nodeId: node.id },
+          ),
+        );
+      }
+    }
   }
 
   for (const edge of definition.edges) {
@@ -221,6 +331,21 @@ export function validateDefinition(
       );
     }
     edgeIds.add(edge.id);
+    const endpointKey = JSON.stringify([
+      edge.source.nodeId,
+      edge.source.port,
+      edge.target.nodeId,
+      edge.target.port,
+    ]);
+    if (endpoints.has(endpointKey))
+      issues.push(
+        issue(
+          'DUPLICATE_CONNECTION',
+          'Связь между этими портами уже существует',
+          { kind: 'edge', edgeId: edge.id },
+        ),
+      );
+    endpoints.add(endpointKey);
 
     const sourceNode = nodeById.get(edge.source.nodeId);
     const targetNode = nodeById.get(edge.target.nodeId);
@@ -235,8 +360,8 @@ export function validateDefinition(
       continue;
     }
 
-    const sourceType = findType(catalog, sourceNode);
-    const targetType = findType(catalog, targetNode);
+    const sourceType = resolveNodeType(catalog, sourceNode);
+    const targetType = resolveNodeType(catalog, targetNode);
     const sourcePort = sourceType?.outputs.find(
       (port) => port.name === edge.source.port,
     );
@@ -266,7 +391,7 @@ export function validateDefinition(
   }
 
   for (const node of definition.nodes) {
-    const nodeType = findType(catalog, node);
+    const nodeType = resolveNodeType(catalog, node);
     if (!nodeType) continue;
 
     for (const port of nodeType.inputs) {
@@ -302,23 +427,29 @@ export function validateDefinition(
   }
 
   const endNodes = definition.nodes.filter(
-    (node) => node.type === 'builtin.end',
+    (node) => node.type === 'builtin.return',
   );
 
   if (endNodes.length !== 1) {
     issues.push(
-      issue('INVALID_END_COUNT', 'В графе должен быть ровно один узел «Конец»', {
-        kind: 'graph',
-      }),
+      issue(
+        'INVALID_RETURN_COUNT',
+        'В графе должен быть ровно один узел return',
+        {
+          kind: 'graph',
+        },
+      ),
     );
   }
 
   if (hasCycle(definition)) {
-    issues.push(issue('CYCLE_DETECTED', 'Граф содержит цикл', { kind: 'graph' }));
+    issues.push(
+      issue('CYCLE_DETECTED', 'Граф содержит цикл', { kind: 'graph' }),
+    );
   } else if (endNodes.length === 1) {
-    for (const nodeId of nodesWithoutPathToEnd(definition)) {
+    for (const nodeId of nodesWithoutPathToReturn(definition)) {
       issues.push(
-        issue('NO_PATH_TO_END', 'Узел не входит в путь, ведущий к концу', {
+        issue('NO_PATH_TO_RETURN', 'Узел не входит в путь, ведущий к return', {
           kind: 'node',
           nodeId,
         }),
@@ -347,4 +478,3 @@ export function validateDefinition(
 
   return { valid: issues.length === 0, issues };
 }
-

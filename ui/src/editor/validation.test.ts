@@ -1,14 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { mockNodeCatalog } from '../mocks/nodeCatalog';
 import { sampleDraft } from '../mocks/sampleDraft';
+import { controlFlowDraft } from '../mocks/controlFlowDraft';
+import { resolveNodeType } from './nodePorts';
 import { validateDefinition } from './validation';
 
 describe('mock pipeline validation', () => {
-  it('accepts the contract example', () => {
-    const result = validateDefinition(
-      sampleDraft.definition,
+  it('accepts the control example with an explicit control output and input', () => {
+    const definition = controlFlowDraft.definition;
+    expect(validateDefinition(definition, mockNodeCatalog)).toEqual({
+      valid: true,
+      issues: [],
+    });
+    const edge = definition.edges.find(
+      (edge) => edge.id === 'control-print-to-after',
+    )!;
+    const source = resolveNodeType(
       mockNodeCatalog,
-    );
+      definition.nodes.find((node) => node.id === edge.source.nodeId)!,
+    )!;
+    const target = resolveNodeType(
+      mockNodeCatalog,
+      definition.nodes.find((node) => node.id === edge.target.nodeId)!,
+    )!;
+    expect(
+      source.outputs.find((port) => port.name === edge.source.port)?.dataType,
+    ).toBe('control');
+    expect(
+      target.inputs.find((port) => port.name === edge.target.port)?.dataType,
+    ).toBe('control');
+  });
+
+  it('accepts the contract example', () => {
+    const result = validateDefinition(sampleDraft.definition, mockNodeCatalog);
 
     expect(result).toEqual({ valid: true, issues: [] });
   });
@@ -16,7 +40,7 @@ describe('mock pipeline validation', () => {
   it('reports a missing required connection', () => {
     const definition = structuredClone(sampleDraft.definition);
     definition.edges = definition.edges.filter(
-      (edge) => edge.target.nodeId !== 'read-file',
+      (edge) => edge.target.nodeId !== 'python-read',
     );
 
     const result = validateDefinition(definition, mockNodeCatalog);
@@ -27,7 +51,7 @@ describe('mock pipeline validation', () => {
         expect.objectContaining({
           code: 'MISSING_CONNECTION',
           location: expect.objectContaining({
-            nodeId: 'read-file',
+            nodeId: 'python-read',
             port: 'file',
           }),
         }),
@@ -61,8 +85,8 @@ describe('mock pipeline validation', () => {
       definition.edges.find((edge) => edge.id === 'edge-input-read')!,
       {
         id: 'edge-read-end',
-        source: { nodeId: 'read-file', port: 'text' },
-        target: { nodeId: 'end', port: 'in' },
+        source: { nodeId: 'python-read', port: 'text' },
+        target: { nodeId: 'return', port: 'in' },
       },
     ];
 
@@ -72,4 +96,3 @@ describe('mock pipeline validation', () => {
     });
   });
 });
-

@@ -1,5 +1,6 @@
 import type {
   NodeCatalog,
+  NodeLogs,
   PipelineDraft,
   ValidationResult,
 } from '../domain/pipeline';
@@ -20,6 +21,10 @@ export class HttpPipelineRepository implements PipelineRepository {
 
   constructor(options: HttpPipelineRepositoryOptions = {}) {
     this.baseUrl = options.baseUrl ?? defaultBaseUrl;
+  }
+
+  async getNodeLogs(_runId: string, _nodeId: string): Promise<NodeLogs | null> {
+    throw new Error('Получение логов через HTTP API ещё не подключено');
   }
 
   async getNodeCatalog(version?: string) {
@@ -95,3 +100,5 @@ async function readErrorMessage(response: Response): Promise<string> {
 
   return `${response.status} ${response.statusText}`;
 }
+
+export const httpPipelineRepository = new HttpPipelineRepository();

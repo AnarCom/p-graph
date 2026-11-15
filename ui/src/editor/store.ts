@@ -1,8 +1,12 @@
 import { create } from 'zustand';
+import { resolveNodeType } from './nodePorts';
+import { canConnect } from './connections';
 import type {
   NodeCatalog,
   NodeTypeDefinition,
   PipelineDefinition,
+  PythonImplementation,
+  PortDefinition,
   ValidationIssue,
   Viewport,
 } from '../domain/pipeline';
@@ -11,6 +15,7 @@ interface EditorStore {
   definition: PipelineDefinition | null;
   catalog: NodeCatalog | null;
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
   issues: ValidationIssue[];
   dirty: boolean;
   hydrate: (definition: PipelineDefinition, catalog: NodeCatalog) => void;
@@ -20,12 +25,24 @@ interface EditorStore {
   ) => void;
   removeNode: (nodeId: string) => void;
   selectNode: (nodeId: string | null) => void;
+  selectEdge: (edgeId: string | null) => void;
   updateNodePosition: (
     nodeId: string,
     position: { x: number; y: number },
   ) => void;
   updateNodeTitle: (nodeId: string, title: string) => void;
   updateNodeConfig: (nodeId: string, name: string, value: unknown) => void;
+  updateNodePorts: (
+    nodeId: string,
+    direction: 'inputs' | 'outputs',
+    ports: PortDefinition[],
+    renamed?: Record<string, string>,
+  ) => void;
+  updateNodeCode: (nodeId: string, code: string) => void;
+  updateNodeEnvironment: (
+    nodeId: string,
+    patch: Pick<PythonImplementation, 'pythonVersion' | 'requirements'>,
+  ) => void;
   connect: (
     sourceNodeId: string,
     sourcePort: string,
@@ -54,6 +71,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   definition: null,
   catalog: null,
   selectedNodeId: null,
+  selectedEdgeId: null,
   issues: [],
   dirty: false,
 
@@ -62,6 +80,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       definition: structuredClone(definition),
       catalog: structuredClone(catalog),
       selectedNodeId: null,
+      selectedEdgeId: null,
       issues: [],
       dirty: false,
     }),
@@ -84,6 +103,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
               typeVersion: nodeType.version,
               title: nodeType.title,
               config: initialConfig(nodeType),
+              ...(nodeType.editablePorts
+                ? {
+                    inputs: structuredClone(nodeType.inputs),
+                    outputs: structuredClone(nodeType.outputs),
+                  }
+                : {}),
+              ...(nodeType.implementation
+                ? { implementation: structuredClone(nodeType.implementation) }
+                : {}),
               ui: {
                 position: position ?? {
                   x: 160 + (index % 3) * 280,
@@ -94,6 +122,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
           ],
         },
         selectedNodeId: id,
+        selectedEdgeId: null,
         dirty: true,
         issues: [],
       };
@@ -114,12 +143,20 @@ export const useEditorStore = create<EditorStore>((set) => ({
         },
         selectedNodeId:
           state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+        selectedEdgeId: state.definition.edges.some(
+          (edge) =>
+            edge.id === state.selectedEdgeId &&
+            (edge.source.nodeId === nodeId || edge.target.nodeId === nodeId),
+        )
+          ? null
+          : state.selectedEdgeId,
         dirty: true,
         issues: [],
       };
     }),
 
-  selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
+  selectNode: (nodeId) => set({ selectedNodeId: nodeId, selectedEdgeId: null }),
+  selectEdge: (edgeId) => set({ selectedEdgeId: edgeId, selectedNodeId: null }),
 
   updateNodePosition: (nodeId, position) =>
     set((state) => {
@@ -175,18 +212,141 @@ export const useEditorStore = create<EditorStore>((set) => ({
       };
     }),
 
+  updateNodeCode: (nodeId, code) =>
+    set((state) => {
+      if (!state.definition) return state;
+      return {
+        definition: {
+          ...state.definition,
+          nodes: state.definition.nodes.map((node) =>
+            node.id === nodeId && node.type === 'builtin.python'
+              ? {
+                  ...node,
+                  implementation: {
+                    ...node.implementation,
+                    language: 'python',
+                    entrypoint: 'run',
+                    code,
+                  },
+                }
+              : node,
+          ),
+        },
+        dirty: true,
+        issues: [],
+      };
+    }),
+
+  updateNodeEnvironment: (nodeId, patch) =>
+    set((state) => {
+      if (!state.definition) return state;
+      return {
+        definition: {
+          ...state.definition,
+          nodes: state.definition.nodes.map((node) =>
+            node.id === nodeId && node.type === 'builtin.python'
+              ? {
+                  ...node,
+                  implementation: {
+                    language: 'python',
+                    entrypoint: 'run',
+                    code: '',
+                    ...node.implementation,
+                    ...structuredClone(patch),
+                  },
+                }
+              : node,
+          ),
+        },
+        dirty: true,
+        issues: [],
+      };
+    }),
+
+  updateNodePorts: (nodeId, direction, ports, renamed) =>
+    set((state) => {
+      if (!state.definition || !state.catalog) return state;
+      const node = state.definition.nodes.find(
+        (candidate) => candidate.id === nodeId,
+      );
+      if (!node || !resolveNodeType(state.catalog, node)?.editablePorts)
+        return state;
+      const endpoint = direction === 'inputs' ? 'target' : 'source';
+      const renames = new Map(Object.entries(renamed ?? {}));
+      const names = new Set(ports.map((port) => port.name));
+      const edges = state.definition.edges
+        .map((edge) => {
+          if (
+            renames.get(edge[endpoint].port) &&
+            edge[endpoint].nodeId === nodeId
+          ) {
+            return {
+              ...edge,
+              [endpoint]: { nodeId, port: renames.get(edge[endpoint].port)! },
+            };
+          }
+          return edge;
+        })
+        .filter(
+          (edge) =>
+            edge[endpoint].nodeId !== nodeId || names.has(edge[endpoint].port),
+        );
+      return {
+        definition: {
+          ...state.definition,
+          edges,
+          nodes: state.definition.nodes.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  [direction]: structuredClone(ports),
+                  ...(direction === 'inputs' &&
+                  candidate.type === 'builtin.return'
+                    ? {
+                        outputs: (
+                          resolveNodeType(state.catalog!, candidate)?.outputs ??
+                          []
+                        ).map((output) => {
+                          const sourcePort =
+                            renames.get(output.sourcePort ?? output.name) ??
+                            output.sourcePort ??
+                            output.name;
+                          const input = ports.find(
+                            (port) => port.name === sourcePort,
+                          );
+                          return {
+                            ...output,
+                            sourcePort,
+                            ...(input ? { dataType: input.dataType } : {}),
+                          };
+                        }),
+                      }
+                    : {}),
+                }
+              : candidate,
+          ),
+        },
+        dirty: true,
+        issues: [],
+      };
+    }),
+
   connect: (sourceNodeId, sourcePort, targetNodeId, targetPort) =>
     set((state) => {
       if (!state.definition) return state;
 
-      const duplicate = state.definition.edges.some(
-        (edge) =>
-          edge.source.nodeId === sourceNodeId &&
-          edge.source.port === sourcePort &&
-          edge.target.nodeId === targetNodeId &&
-          edge.target.port === targetPort,
-      );
-      if (duplicate) return state;
+      if (
+        !state.catalog ||
+        !canConnect(
+          state.definition,
+          state.catalog,
+          sourceNodeId,
+          sourcePort,
+          targetNodeId,
+          targetPort,
+        )
+      )
+        return state;
 
       return {
         definition: {
@@ -213,6 +373,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
           ...state.definition,
           edges: state.definition.edges.filter((edge) => edge.id !== edgeId),
         },
+        selectedEdgeId:
+          state.selectedEdgeId === edgeId ? null : state.selectedEdgeId,
         dirty: true,
         issues: [],
       };
@@ -245,4 +407,3 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setIssues: (issues) => set({ issues }),
   markSaved: () => set({ dirty: false }),
 }));
-

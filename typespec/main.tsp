@@ -4,6 +4,7 @@ import "@typespec/openapi3";
 
 import "./operations/pipeline.tsp";
 import "./operations/run.tsp";
+import "./models/logs.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.OpenAPI;

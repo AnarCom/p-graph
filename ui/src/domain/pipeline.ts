@@ -29,6 +29,9 @@ export interface PipelineNode {
   typeVersion: number;
   title?: string;
   config: Record<string, unknown>;
+  inputs?: PortDefinition[];
+  outputs?: PortDefinition[];
+  implementation?: PythonImplementation;
   ui?: NodeUi;
 }
 
@@ -62,6 +65,7 @@ export interface PortDefinition {
   name: string;
   title: string;
   dataType: string;
+  sourcePort?: string;
   minConnections?: number;
   maxConnections?: number | null;
 }
@@ -94,6 +98,8 @@ export interface NodeTypeDefinition {
   inputs: PortDefinition[];
   outputs: PortDefinition[];
   configSchema: ConfigSchema;
+  editablePorts?: boolean;
+  implementation?: PythonImplementation;
 }
 
 export interface NodeCatalog {
@@ -102,11 +108,7 @@ export interface NodeCatalog {
 }
 
 export type ValidationLocationKind =
-  | 'graph'
-  | 'node'
-  | 'port'
-  | 'edge'
-  | 'config';
+  'graph' | 'node' | 'port' | 'edge' | 'config';
 
 export interface ValidationLocation {
   kind: ValidationLocationKind;
@@ -127,3 +129,22 @@ export interface ValidationResult {
   issues: ValidationIssue[];
 }
 
+export interface PythonImplementation {
+  language: 'python';
+  entrypoint: 'run';
+  code: string;
+  pythonVersion?: string;
+  requirements?: string[];
+}
+
+export interface NodeLogs {
+  runId: string;
+  nodeId: string;
+  attempt: number;
+  status: 'Succeeded' | 'Failed' | 'Running';
+  entries: {
+    timestamp: string;
+    stream: 'stdout' | 'stderr';
+    message: string;
+  }[];
+}

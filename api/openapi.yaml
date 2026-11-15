@@ -1,0 +1,715 @@
+openapi: 3.0.0
+info:
+  title: p-graph API
+  version: 0.0.0
+tags:
+  - name: apiserver
+  - name: scheduler
+paths:
+  /health:
+    get:
+      operationId: health
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+      tags:
+        - apiserver
+        - scheduler
+  /node-catalog:
+    get:
+      operationId: getNodeCatalog
+      parameters:
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeCatalog'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.NodeCatalogNotFound'
+      tags:
+        - apiserver
+  /pipeline/run:
+    post:
+      operationId: runPipeline
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scheduler.Run'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scheduler.InvalidRunRequest'
+      tags:
+        - scheduler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Scheduler.RunPipelineRequest'
+  /pipelines/{pipelineId}/draft:
+    get:
+      operationId: getDraft
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineDraft'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.PipelineNotFound'
+      tags:
+        - apiserver
+    put:
+      operationId: saveDraft
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.PipelineNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.DraftConflict'
+      tags:
+        - apiserver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PipelineDraft'
+    delete:
+      operationId: resetDraft
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineDraft'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.PipelineNotFound'
+      tags:
+        - apiserver
+  /pipelines/{pipelineId}/publish:
+    post:
+      operationId: publishDraft
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedPipeline'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/Apiserver.PipelineNotFound'
+                  - $ref: '#/components/schemas/Apiserver.DraftNotFound'
+      tags:
+        - apiserver
+  /pipelines/{pipelineId}/validate:
+    post:
+      operationId: validateDraft
+      parameters:
+        - name: pipelineId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Apiserver.PipelineNotFound'
+      tags:
+        - apiserver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PipelineDefinition'
+components:
+  schemas:
+    Apiserver.DraftConflict:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    Apiserver.DraftNotFound:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    Apiserver.NodeCatalogNotFound:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    Apiserver.PipelineNotFound:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    ConfigPropertySchema:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          $ref: '#/components/schemas/ConfigValueType'
+        title:
+          type: string
+        description:
+          type: string
+        default:
+          anyOf:
+            - type: string
+            - type: number
+            - type: boolean
+        enum:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - type: number
+              - type: boolean
+    ConfigSchema:
+      type: object
+      required:
+        - type
+        - properties
+      properties:
+        $schema:
+          type: string
+        type:
+          type: string
+          enum:
+            - object
+        properties:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ConfigPropertySchema'
+        required:
+          type: array
+          items:
+            type: string
+        additionalProperties:
+          type: boolean
+    ConfigValueType:
+      type: string
+      enum:
+        - string
+        - number
+        - integer
+        - boolean
+    EdgeEndpoint:
+      type: object
+      required:
+        - nodeId
+        - port
+      properties:
+        nodeId:
+          type: string
+        port:
+          type: string
+    GraphUi:
+      type: object
+      properties:
+        viewport:
+          $ref: '#/components/schemas/Viewport'
+      allOf:
+        - type: object
+          additionalProperties: {}
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+    InputPortDefinition:
+      type: object
+      required:
+        - name
+        - title
+        - dataType
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        dataType:
+          type: string
+        minConnections:
+          type: integer
+          format: int32
+        maxConnections:
+          type: integer
+          format: int32
+          nullable: true
+    LogEntry:
+      type: object
+      required:
+        - timestamp
+        - stream
+        - message
+      properties:
+        timestamp:
+          type: string
+        stream:
+          type: string
+          enum:
+            - stdout
+            - stderr
+        message:
+          type: string
+    NodeCatalog:
+      type: object
+      required:
+        - catalogVersion
+        - nodeTypes
+      properties:
+        catalogVersion:
+          type: string
+        nodeTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeTypeDefinition'
+    NodeLogs:
+      type: object
+      required:
+        - runId
+        - nodeId
+        - attempt
+        - status
+        - entries
+      properties:
+        runId:
+          type: string
+        nodeId:
+          type: string
+        attempt:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum:
+            - Succeeded
+            - Failed
+            - Running
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntry'
+    NodeTypeDefinition:
+      type: object
+      required:
+        - type
+        - version
+        - title
+        - category
+        - status
+        - inputs
+        - outputs
+        - configSchema
+      properties:
+        type:
+          type: string
+        version:
+          type: integer
+          format: int32
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        status:
+          $ref: '#/components/schemas/NodeTypeStatus'
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/InputPortDefinition'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutputPortDefinition'
+        configSchema:
+          $ref: '#/components/schemas/ConfigSchema'
+        editablePorts:
+          type: boolean
+        implementation:
+          $ref: '#/components/schemas/PythonImplementation'
+    NodeTypeStatus:
+      type: string
+      enum:
+        - active
+        - deprecated
+        - disabled
+    NodeUi:
+      type: object
+      properties:
+        position:
+          $ref: '#/components/schemas/Position'
+      allOf:
+        - type: object
+          additionalProperties: {}
+    OutputPortDefinition:
+      type: object
+      required:
+        - name
+        - title
+        - dataType
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        dataType:
+          type: string
+        sourcePort:
+          type: string
+    PipelineDefinition:
+      type: object
+      required:
+        - schemaVersion
+        - nodeCatalogVersion
+        - inputs
+        - nodes
+        - edges
+      properties:
+        schemaVersion:
+          type: string
+        nodeCatalogVersion:
+          type: string
+        inputs:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PipelineInput'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineEdge'
+        ui:
+          $ref: '#/components/schemas/GraphUi'
+    PipelineDraft:
+      type: object
+      required:
+        - pipelineId
+        - baseRevision
+        - definition
+      properties:
+        pipelineId:
+          type: string
+        baseRevision:
+          type: integer
+          format: int64
+          nullable: true
+        definition:
+          $ref: '#/components/schemas/PipelineDefinition'
+    PipelineEdge:
+      type: object
+      required:
+        - id
+        - source
+        - target
+      properties:
+        id:
+          type: string
+        source:
+          $ref: '#/components/schemas/EdgeEndpoint'
+        target:
+          $ref: '#/components/schemas/EdgeEndpoint'
+    PipelineInput:
+      type: object
+      required:
+        - type
+        - title
+        - required
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        required:
+          type: boolean
+    PipelineNode:
+      type: object
+      required:
+        - id
+        - type
+        - typeVersion
+        - config
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        typeVersion:
+          type: integer
+          format: int32
+        title:
+          type: string
+        config:
+          type: object
+          additionalProperties: {}
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/InputPortDefinition'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutputPortDefinition'
+        implementation:
+          $ref: '#/components/schemas/PythonImplementation'
+        ui:
+          $ref: '#/components/schemas/NodeUi'
+    Position:
+      type: object
+      required:
+        - x
+        - 'y'
+      properties:
+        x:
+          type: number
+          format: double
+        'y':
+          type: number
+          format: double
+    PublishedPipeline:
+      type: object
+      required:
+        - pipelineId
+        - revision
+      properties:
+        pipelineId:
+          type: string
+        revision:
+          type: integer
+          format: int32
+    PythonImplementation:
+      type: object
+      required:
+        - language
+        - entrypoint
+        - code
+      properties:
+        language:
+          type: string
+          enum:
+            - python
+        entrypoint:
+          type: string
+          enum:
+            - run
+        code:
+          type: string
+        pythonVersion:
+          type: string
+          pattern: ^3\.[0-9]+(?:\.[0-9]+)?$
+          description: Requested Python version (3.x or 3.x.y); omission means 3.12. Availability is validated by the future backend runner.
+          default: '3.12'
+        requirements:
+          type: array
+          items:
+            type: string
+          description: Direct dependency declarations. Omission means []. MVP accepts package[extras]==version exact pins in canonical form; these declarations are not a resolved lockfile. Installation is the responsibility of the future backend runner.
+          default: []
+    Scheduler.InvalidRunRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    Scheduler.Run:
+      type: object
+      required:
+        - runId
+        - pipelineId
+        - revision
+        - status
+      properties:
+        runId:
+          type: string
+        pipelineId:
+          type: string
+        revision:
+          type: integer
+          format: int32
+        status:
+          $ref: '#/components/schemas/Scheduler.RunStatus'
+    Scheduler.RunPipelineRequest:
+      type: object
+      required:
+        - pipelineId
+        - revision
+      properties:
+        pipelineId:
+          type: string
+        revision:
+          type: integer
+          format: int32
+        inputs:
+          type: object
+          additionalProperties:
+            type: string
+    Scheduler.RunStatus:
+      type: string
+      enum:
+        - Pending
+        - Scheduled
+        - Running
+        - Succeeded
+        - Failed
+        - Cancelled
+    ValidationIssue:
+      type: object
+      required:
+        - code
+        - message
+        - location
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        location:
+          $ref: '#/components/schemas/ValidationLocation'
+    ValidationLocation:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/ValidationLocationKind'
+        nodeId:
+          type: string
+        edgeId:
+          type: string
+        port:
+          type: string
+        configPath:
+          type: string
+    ValidationLocationKind:
+      type: string
+      enum:
+        - graph
+        - node
+        - port
+        - edge
+        - config
+    ValidationResult:
+      type: object
+      required:
+        - valid
+        - issues
+      properties:
+        valid:
+          type: boolean
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+    Viewport:
+      type: object
+      required:
+        - zoom
+      properties:
+        zoom:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/Position'
+servers:
+  - url: http://apiserver.local
+    variables: {}

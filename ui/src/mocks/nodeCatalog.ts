@@ -3,7 +3,7 @@ import type { NodeCatalog } from '../domain/pipeline';
 const schema = 'https://json-schema.org/draft/2020-12/schema';
 
 export const mockNodeCatalog: NodeCatalog = {
-  catalogVersion: '0.1',
+  catalogVersion: '0.2',
   nodeTypes: [
     {
       type: 'builtin.file-input',
@@ -35,45 +35,40 @@ export const mockNodeCatalog: NodeCatalog = {
       },
     },
     {
-      type: 'builtin.read-file',
+      type: 'builtin.python',
       version: 1,
-      title: 'Прочитать файл',
-      description: 'Прочитать файл и вернуть его содержимое как строку',
-      category: 'files',
+      title: 'Python кубик',
+      description: 'Создать свой кубик: Python-код, входы и выходы',
+      category: 'code',
       status: 'active',
+      editablePorts: true,
       inputs: [
-        {
-          name: 'file',
-          title: 'Файл',
-          dataType: 'artifact.file',
-          minConnections: 1,
-          maxConnections: 1,
-        },
-      ],
-      outputs: [
         {
           name: 'text',
           title: 'Текст',
           dataType: 'text',
+          minConnections: 1,
+          maxConnections: 1,
         },
       ],
+      outputs: [{ name: 'result', title: 'Результат', dataType: 'text' }],
+      implementation: {
+        language: 'python',
+        entrypoint: 'run',
+        pythonVersion: '3.12',
+        requirements: [],
+        code: 'def run(inputs):\n    text = inputs["text"]\n    print(text)\n    return {"result": text}\n',
+      },
       configSchema: {
         $schema: schema,
         type: 'object',
-        properties: {
-          encoding: {
-            type: 'string',
-            title: 'Кодировка',
-            default: 'utf-8',
-            enum: ['utf-8'],
-          },
-        },
+        properties: {},
         additionalProperties: false,
       },
     },
     {
       type: 'builtin.console-print',
-      version: 1,
+      version: 2,
       title: 'Вывести в консоль',
       description: 'Записать строку в журнал запуска',
       category: 'text',
@@ -84,7 +79,7 @@ export const mockNodeCatalog: NodeCatalog = {
           title: 'Текст',
           dataType: 'text',
           minConnections: 1,
-          maxConnections: 1,
+          maxConnections: null,
         },
       ],
       outputs: [
@@ -108,11 +103,12 @@ export const mockNodeCatalog: NodeCatalog = {
       },
     },
     {
-      type: 'builtin.end',
+      type: 'builtin.return',
       version: 1,
-      title: 'Конец',
-      description: 'Явно обозначить успешное завершение pipeline',
+      title: 'return',
+      description: 'Вернуть результаты pipeline через настраиваемые параметры',
       category: 'flow',
+      editablePorts: true,
       status: 'active',
       inputs: [
         {
@@ -120,10 +116,17 @@ export const mockNodeCatalog: NodeCatalog = {
           title: 'Вход',
           dataType: 'any',
           minConnections: 1,
-          maxConnections: 1,
+          maxConnections: null,
         },
       ],
-      outputs: [],
+      outputs: [
+        {
+          name: 'result',
+          title: 'Результат',
+          dataType: 'any',
+          sourcePort: 'in',
+        },
+      ],
       configSchema: {
         $schema: schema,
         type: 'object',
@@ -133,4 +136,3 @@ export const mockNodeCatalog: NodeCatalog = {
     },
   ],
 };
-

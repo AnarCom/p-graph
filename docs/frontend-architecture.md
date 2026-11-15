@@ -1,8 +1,47 @@
 # Архитектура frontend для редактора pipeline
 
-Статус: proposed  
-Целевой контракт графа: schemaVersion 0.1  
+Статус: исходный архитектурный план; реализована часть возможностей
+Текущий контракт графа: schemaVersion 0.2
 Основание: [pipeline-backend-json-format.md](pipeline-backend-json-format.md)
+
+## Текущая реализация (0.2)
+
+Разделы ниже сохраняют исходный план 0.1 и описание будущей HTTP-интеграции.
+Они не являются перечнем уже реализованных функций. Текущий frontend находится
+в `ui/src/`: app, domain, editor, mocks, repository. Используются React,
+Material UI, React Flow, Zustand и CodeMirror; TanStack Query, Ajv и HTTP-клиент
+пока не подключены. Актуальная семантика — в
+[pipeline-backend-json-format.md](pipeline-backend-json-format.md).
+
+- `nodePorts.ts` разрешает порты экземпляра поверх editablePorts каталога.
+- `connections.ts` проверяет типы, лимиты, дубликаты и циклы и используется
+  canvas и store. `validation.ts` проверяет документ целиком.
+- `PortsEditor` меняет порты одной командой; переименование обновляет endpoints,
+  удаление убирает связи. Порты React Flow обновляются useUpdateNodeInternals.
+- `PythonEditor` загружается по необходимости; CodeMirror поддерживает Python,
+  подсветку, номера строк, отступы и историю изменений кода. История команд
+  всего графа пока не реализована.
+- `builtin.python` хранит implementation в экземпляре; inputs/outputs и код
+  входят в whitelist сериализатора и сохраняются в localStorage.
+- `builtin.return` заменяет end. Его выходы задают именованные результаты
+  pipeline через sourcePort, а не исходящие зависимости DAG.
+- `NodeLogsPanel` получает данные через PipelineRepository.getNodeLogs.
+  Логи принадлежат запуску и попытке, в definition не сохраняются.
+  В текущем UI запуск фиксирован на явно обозначенный демонстрационный.
+- `migrateDefinition` автоматически вызывается репозиторием при загрузке
+  черновика 0.1. Исходный JSON резервируется, результат сохраняется в localStorage.
+- PythonEnvironmentEditor управляет implementation.pythonVersion и requirements.
+  pythonEnvironment.ts проверяет формат и дубликаты; store сохраняет окружение
+  при изменении кода и код при изменении окружения. Поля необязательные:
+  совместимость 0.2 сохраняется без миграции. Установка и исполнение — будущий backend.
+- Сохранено подключение к HTTP API из актуальной main (режим по умолчанию).
+  `?mock=true` явно включает локальный редактор с каталогом 0.2; пример control
+  всегда локальный. Старые серверные графы не мигрируются и не перезаписываются
+  при загрузке. Просмотр HTTP-логов пока не подключён.
+- TypeSpec содержит общие модели в typespec/models и существующие операции
+  в typespec/operations. Добавлены декларации Python, портов и логов.
+  Для frontend-контракта обновляется OpenAPI; генерация серверного Go-кода
+  остаётся отдельной задачей backend-интеграции.
 
 ## 1. Контекст и текущее состояние
 

@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useUpdateNodeInternals } from '@xyflow/react';
 import {
   Box,
   Chip,
@@ -31,6 +33,7 @@ const categoryColors: Record<string, string> = {
   files: '#38bdf8',
   text: '#a78bfa',
   flow: '#34d399',
+  code: '#fbbf24',
 };
 
 function dataTypeLabel(dataType: string) {
@@ -43,6 +46,11 @@ export function PipelineNodeView({
   selected,
 }: NodeProps<PipelineFlowNode>) {
   const { node, nodeType, issues } = data;
+  const updateNodeInternals = useUpdateNodeInternals();
+  const portSignature = JSON.stringify([nodeType?.inputs, nodeType?.outputs]);
+  useEffect(() => {
+    updateNodeInternals(node.id);
+  }, [node.id, portSignature, updateNodeInternals]);
   const color = categoryColors[nodeType?.category ?? ''] ?? '#94a3b8';
   const hasError = issues.length > 0;
 
@@ -66,10 +74,7 @@ export function PipelineNodeView({
     >
       <Box sx={{ height: 4, bgcolor: color, borderRadius: '12px 12px 0 0' }} />
       <Box sx={{ px: 1.5, pt: 1.25, pb: 1 }}>
-        <Stack
-          direction="row"
-          sx={{ justifyContent: 'space-between', gap: 1 }}
-        >
+        <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
           <Box sx={{ minWidth: 0 }}>
             <Typography
               variant="subtitle2"
@@ -115,9 +120,9 @@ export function PipelineNodeView({
           direction="row"
           sx={{ justifyContent: 'space-between', p: 1.25 }}
         >
-          <Stack spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+          <Stack spacing={0} sx={{ alignItems: 'flex-start' }}>
             {nodeType.inputs.map((port, index) => (
-              <Box key={port.name}>
+              <Box key={port.name} sx={{ height: 28 }}>
                 <Handle
                   id={`input:${port.name}`}
                   type="target"
@@ -140,12 +145,13 @@ export function PipelineNodeView({
             ))}
           </Stack>
 
-          <Stack spacing={0.75} sx={{ alignItems: 'flex-end' }}>
+          <Stack spacing={0} sx={{ alignItems: 'flex-end' }}>
             {nodeType.outputs.map((port, index) => (
-              <Box key={port.name}>
+              <Box key={port.name} sx={{ height: 28 }}>
                 <Handle
                   id={`output:${port.name}`}
                   type="source"
+                  isConnectable={node.type !== 'builtin.return'}
                   position={HandlePosition.Right}
                   style={{
                     top: 78 + index * 28,
@@ -169,4 +175,3 @@ export function PipelineNodeView({
     </Paper>
   );
 }
-

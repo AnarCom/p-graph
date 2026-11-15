@@ -22,4 +22,4 @@ typespec/node_modules/
 typespec/.npmrc
 
 # OAPI
-api/openapi.yaml
+# api/openapi.yaml is generated and committed with TypeSpec.
