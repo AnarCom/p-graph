@@ -6,11 +6,24 @@ import (
 	"github.com/spf13/viper"
 )
 
+type ArgoConfig struct {
+	ServerURL string `mapstructure:"server_url"`
+	Namespace string `mapstructure:"namespace"`
+}
+
+type S3Config struct {
+	Endpoint  string `mapstructure:"endpoint"`
+	Bucket    string `mapstructure:"bucket"`
+	UseSSL    bool   `mapstructure:"use_ssl"`
+	AccessKey string `mapstructure:"access_key"`
+	SecretKey string `mapstructure:"secret_key"`
+}
+
 type Config struct {
-	ListenAddr    string `mapstructure:"listen_addr"`
-	DatabaseURL   string `mapstructure:"database_url"`
-	ArgoServerURL string `mapstructure:"argo_server_url"`
-	ArgoNamespace string `mapstructure:"argo_namespace"`
+	ListenAddr  string     `mapstructure:"listen_addr"`
+	DatabaseURL string     `mapstructure:"database_url"`
+	Argo        ArgoConfig `mapstructure:"argo"`
+	S3          S3Config   `mapstructure:"s3"`
 }
 
 func Load() (*Config, error) {

@@ -3,6 +3,7 @@ import "@typespec/openapi";
 import "@typespec/openapi3";
 
 import "./operations/pipeline.tsp";
+import "./operations/artifact.tsp";
 import "./operations/run.tsp";
 import "./models/logs.tsp";
 

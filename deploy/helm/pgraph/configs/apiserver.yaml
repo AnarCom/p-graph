@@ -1,2 +1,8 @@
 listen_addr: ":8080"
 database_url: postgres://pgraph:pgraph-dev-password@postgres.pgraph.svc:5432/pgraph?sslmode=disable
+s3:
+  endpoint: minio-service:9000
+  bucket: artifacts
+  use_ssl: false
+  access_key: minioadmin
+  secret_key: minioadmin

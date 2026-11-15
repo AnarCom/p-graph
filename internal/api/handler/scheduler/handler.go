@@ -8,7 +8,7 @@ import (
 )
 
 type SchedulerService interface {
-	RunPipeline(ctx context.Context, pipelineID string, revision int32) (model.Run, error)
+	RunPipeline(ctx context.Context, pipelineID string, revision int32, inputs map[string]string) (model.Run, error)
 }
 
 type SchedulerHandler struct {
@@ -28,7 +28,12 @@ func (h *SchedulerHandler) RunPipeline(ctx context.Context, req gen.RunPipelineR
 		return gen.RunPipeline400JSONResponse{Message: "missing request body"}, nil
 	}
 
-	run, err := h.runSvc.RunPipeline(ctx, req.Body.PipelineId, req.Body.Revision)
+	inputs := map[string]string{}
+	if req.Body.Inputs != nil {
+		inputs = *req.Body.Inputs
+	}
+
+	run, err := h.runSvc.RunPipeline(ctx, req.Body.PipelineId, req.Body.Revision, inputs)
 	if err != nil {
 		return gen.RunPipeline400JSONResponse{Message: err.Error()}, nil
 	}

@@ -77,5 +77,3 @@ func (h *StubPipelineHandler) PublishDraft(_ context.Context, req gen.PublishDra
 func (h *StubPipelineHandler) ValidateDraft(context.Context, gen.ValidateDraftRequestObject) (gen.ValidateDraftResponseObject, error) {
 	return gen.ValidateDraft200JSONResponse(h.validationResult), nil
 }
-
-var _ gen.StrictServerInterface = (*StubPipelineHandler)(nil)

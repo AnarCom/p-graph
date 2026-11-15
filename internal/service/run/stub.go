@@ -26,7 +26,7 @@ func NewStubRunService(argo WorkflowSubmitter) *StubRunService {
 	return &StubRunService{argo: argo}
 }
 
-func (s *StubRunService) RunPipeline(ctx context.Context, pipelineID string, revision int32) (model.Run, error) {
+func (s *StubRunService) RunPipeline(ctx context.Context, pipelineID string, revision int32, _ map[string]string) (model.Run, error) {
 	workflow, err := buildStubWorkflow(pipelineID, revision)
 	if err != nil {
 		return model.Run{}, err

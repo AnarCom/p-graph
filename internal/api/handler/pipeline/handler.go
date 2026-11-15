@@ -138,5 +138,3 @@ func (h *PipelineHandler) ValidateDraft(ctx context.Context, req gen.ValidateDra
 
 	return gen.ValidateDraft200JSONResponse(validationResultToGen(result)), nil
 }
-
-var _ gen.StrictServerInterface = (*PipelineHandler)(nil)

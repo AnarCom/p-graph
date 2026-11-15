@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/AnarCom/p-graph/internal/model"
 )
@@ -12,6 +13,12 @@ const (
 	nodeTypeFileInput    = "builtin.file-input"
 	nodeTypeConsolePrint = "builtin.console-print"
 )
+
+type S3Source struct {
+	Endpoint string
+	Bucket   string
+	Insecure bool
+}
 
 type workflow struct {
 	APIVersion string           `json:"apiVersion"`
@@ -25,8 +32,6 @@ type workflowMetadata struct {
 	Labels       map[string]string `json:"labels"`
 }
 
-const stubInputData = "Hello from p-graph!"
-
 type workflowSpec struct {
 	ServiceAccountName string             `json:"serviceAccountName"`
 	Entrypoint         string             `json:"entrypoint,omitempty"`
@@ -39,14 +44,30 @@ type workflowArguments struct {
 }
 
 type workflowArtifact struct {
-	Name string       `json:"name"`
-	Raw  *rawArtifact `json:"raw,omitempty"`
-	Path string       `json:"path,omitempty"`
+	Name string      `json:"name"`
+	S3   *s3Artifact `json:"s3,omitempty"`
+	Path string      `json:"path,omitempty"`
 }
 
-type rawArtifact struct {
-	Data string `json:"data"`
+type s3Artifact struct {
+	Endpoint        string       `json:"endpoint"`
+	Bucket          string       `json:"bucket"`
+	Key             string       `json:"key"`
+	AccessKeySecret secretKeyRef `json:"accessKeySecret"`
+	SecretKeySecret secretKeyRef `json:"secretKeySecret"`
+	Insecure        bool         `json:"insecure"`
 }
+
+type secretKeyRef struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+const (
+	minioSecretName   = "minio-root"
+	minioAccessKeyKey = "rootUser"
+	minioSecretKeyKey = "rootPassword"
+)
 
 type workflowTemplate struct {
 	Name      string         `json:"name"`
@@ -70,7 +91,24 @@ func taskName(nodeID string) string {
 	return taskNameRe.ReplaceAllString(nodeID, "-")
 }
 
-func buildWorkflow(def model.PipelineDefinition, pipelineID string, revision int32) (json.RawMessage, error) {
+func inputNames(def model.PipelineDefinition) ([]string, error) {
+	var names []string
+	for _, node := range def.Nodes {
+		if node.Type != nodeTypeConsolePrint {
+			continue
+		}
+		name, err := consolePrintInputName(def, node)
+		if err != nil {
+			return nil, err
+		}
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}
+
+func buildWorkflow(def model.PipelineDefinition, pipelineID string, revision int32, inputs map[string]model.Artifact, source S3Source) (json.RawMessage, error) {
 	var templates []workflowTemplate
 	var argumentNames []string
 
@@ -83,7 +121,9 @@ func buildWorkflow(def model.PipelineDefinition, pipelineID string, revision int
 				return nil, err
 			}
 			templates = append(templates, consolePrintTemplate(taskName(node.ID), inputName))
-			argumentNames = append(argumentNames, inputName)
+			if !slices.Contains(argumentNames, inputName) {
+				argumentNames = append(argumentNames, inputName)
+			}
 		default:
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedNodeType, node.Type)
 		}
@@ -91,9 +131,20 @@ func buildWorkflow(def model.PipelineDefinition, pipelineID string, revision int
 
 	arguments := workflowArguments{Artifacts: make([]workflowArtifact, 0, len(argumentNames))}
 	for _, name := range argumentNames {
+		artifact, ok := inputs[name]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrMissingInput, name)
+		}
 		arguments.Artifacts = append(arguments.Artifacts, workflowArtifact{
 			Name: name,
-			Raw:  &rawArtifact{Data: stubInputData},
+			S3: &s3Artifact{
+				Endpoint:        source.Endpoint,
+				Bucket:          source.Bucket,
+				Key:             artifact.S3Key,
+				AccessKeySecret: secretKeyRef{Name: minioSecretName, Key: minioAccessKeyKey},
+				SecretKeySecret: secretKeyRef{Name: minioSecretName, Key: minioSecretKeyKey},
+				Insecure:        source.Insecure,
+			},
 		})
 	}
 

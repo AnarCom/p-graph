@@ -11,6 +11,7 @@ import (
 	"github.com/AnarCom/p-graph/internal/migrator"
 	runSvc "github.com/AnarCom/p-graph/internal/service/run"
 	"github.com/AnarCom/p-graph/internal/storage"
+	artifactStorage "github.com/AnarCom/p-graph/internal/storage/artifact"
 	pipelineStorage "github.com/AnarCom/p-graph/internal/storage/pipeline"
 )
 
@@ -32,12 +33,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	argoClient := argo.NewArgoClient(cfg.ArgoServerURL, cfg.ArgoNamespace)
+	argoClient := argo.NewArgoClient(cfg.Argo.ServerURL, cfg.Argo.Namespace)
 
-	store := pipelineStorage.NewPostgresStorage(pool)
+	pipelines := pipelineStorage.NewPostgresStorage(pool)
+	artifacts := artifactStorage.NewPostgresStorage(pool)
 	tx := storage.NewTransactor(pool)
 
-	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(runSvc.NewRunService(store, tx, argoClient)))
+	s3Source := runSvc.S3Source{
+		Endpoint: cfg.S3.Endpoint,
+		Bucket:   cfg.S3.Bucket,
+		Insecure: !cfg.S3.UseSSL,
+	}
+
+	handler := schedulerHandler.NewSchedulerMux(schedulerHandler.NewSchedulerHandler(
+		runSvc.NewRunService(pipelines, artifacts, tx, argoClient, s3Source),
+	))
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,
