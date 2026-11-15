@@ -15,6 +15,7 @@ func NewPipelineMux(h gen.StrictServerInterface) http.Handler {
 
 	return middleware.Apply(
 		gen.HandlerFromMux(gen.NewStrictHandler(h, nil), handler.NewGorillaServeRouter(router)),
+		middleware.Logging,
 		middleware.CORS,
 	)
 }

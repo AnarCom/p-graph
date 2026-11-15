@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -32,7 +33,8 @@ func (s *PostgresStorage) Create(ctx context.Context, id uuid.UUID, a model.Arti
 		RETURNING created_at
 	`, id, a.Filename, a.ContentType, a.Size, a.S3Key).Scan(&a.CreatedAt)
 	if err != nil {
-		return model.Artifact{}, fmt.Errorf("create artifact: %w", err)
+		log.Printf("artifact storage: create %s: %v", id, err)
+		return model.Artifact{}, fmt.Errorf("create artifact: %w", storage.ErrStorage)
 	}
 	return a, nil
 }
@@ -53,7 +55,8 @@ func (s *PostgresStorage) GetArtifact(ctx context.Context, id uuid.UUID) (model.
 		return model.Artifact{}, false, nil
 	}
 	if err != nil {
-		return model.Artifact{}, false, fmt.Errorf("get artifact: %w", err)
+		log.Printf("artifact storage: get %s: %v", id, err)
+		return model.Artifact{}, false, fmt.Errorf("get artifact: %w", storage.ErrStorage)
 	}
 	return a, true, nil
 }
@@ -70,7 +73,8 @@ func (s *PostgresStorage) List(ctx context.Context) ([]model.Artifact, error) {
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("list artifacts: %w", err)
+		log.Printf("artifact storage: list: %v", err)
+		return nil, fmt.Errorf("list artifacts: %w", storage.ErrStorage)
 	}
 	defer rows.Close()
 
@@ -78,12 +82,14 @@ func (s *PostgresStorage) List(ctx context.Context) ([]model.Artifact, error) {
 	for rows.Next() {
 		var a model.Artifact
 		if err := rows.Scan(&a.ArtifactID, &a.Filename, &a.ContentType, &a.Size, &a.S3Key, &a.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan artifact: %w", err)
+			log.Printf("artifact storage: scan: %v", err)
+			return nil, fmt.Errorf("list artifacts: %w", storage.ErrStorage)
 		}
 		artifacts = append(artifacts, a)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate artifacts: %w", err)
+		log.Printf("artifact storage: iterate: %v", err)
+		return nil, fmt.Errorf("list artifacts: %w", storage.ErrStorage)
 	}
 	return artifacts, nil
 }
@@ -96,7 +102,8 @@ func (s *PostgresStorage) Delete(ctx context.Context, id uuid.UUID) (bool, error
 
 	tag, err := conn.Exec(ctx, `DELETE FROM artifacts WHERE id = $1`, id)
 	if err != nil {
-		return false, fmt.Errorf("delete artifact: %w", err)
+		log.Printf("artifact storage: delete %s: %v", id, err)
+		return false, fmt.Errorf("delete artifact: %w", storage.ErrStorage)
 	}
 	return tag.RowsAffected() > 0, nil
 }

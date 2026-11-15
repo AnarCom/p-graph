@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -43,7 +44,8 @@ func (s *PostgresStorage) GetNodeCatalog(ctx context.Context, version *string) (
 		ORDER BY t.type
 	`, resolved)
 	if err != nil {
-		return model.NodeCatalog{}, fmt.Errorf("query node types: %w", err)
+		log.Printf("pipeline storage: query node types: %v", err)
+		return model.NodeCatalog{}, fmt.Errorf("query node types: %w", storage.ErrStorage)
 	}
 	defer rows.Close()
 
@@ -54,16 +56,19 @@ func (s *PostgresStorage) GetNodeCatalog(ctx context.Context, version *string) (
 			&row.Type, &row.Version, &row.Title, &row.Description,
 			&row.Category, &row.Status, &row.Inputs, &row.Outputs, &row.Config,
 		); err != nil {
-			return model.NodeCatalog{}, fmt.Errorf("scan node type: %w", err)
+			log.Printf("pipeline storage: scan node type: %v", err)
+			return model.NodeCatalog{}, fmt.Errorf("scan node type: %w", storage.ErrStorage)
 		}
 		nodeType, err := row.toModel()
 		if err != nil {
-			return model.NodeCatalog{}, fmt.Errorf("node type %s: %w", row.Type, err)
+			log.Printf("pipeline storage: node type %s: %v", row.Type, err)
+			return model.NodeCatalog{}, fmt.Errorf("convert node type: %w", storage.ErrStorage)
 		}
 		nodeTypes = append(nodeTypes, nodeType)
 	}
 	if err := rows.Err(); err != nil {
-		return model.NodeCatalog{}, fmt.Errorf("iterate node types: %w", err)
+		log.Printf("pipeline storage: iterate node types: %v", err)
+		return model.NodeCatalog{}, fmt.Errorf("iterate node types: %w", storage.ErrStorage)
 	}
 
 	return model.NodeCatalog{CatalogVersion: resolved, NodeTypes: nodeTypes}, nil
@@ -77,7 +82,8 @@ func resolveCatalogVersion(ctx context.Context, conn storage.Conn, version *stri
 			*version,
 		).Scan(&exists)
 		if err != nil {
-			return "", fmt.Errorf("check catalog version: %w", err)
+			log.Printf("pipeline storage: check catalog version: %v", err)
+			return "", fmt.Errorf("check catalog version: %w", storage.ErrStorage)
 		}
 		if !exists {
 			return "", ErrNodeCatalogNotFound
@@ -93,7 +99,8 @@ func resolveCatalogVersion(ctx context.Context, conn storage.Conn, version *stri
 		return "", ErrNodeCatalogNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("resolve latest catalog version: %w", err)
+		log.Printf("pipeline storage: resolve latest catalog version: %v", err)
+		return "", fmt.Errorf("resolve latest catalog version: %w", storage.ErrStorage)
 	}
 	return latest, nil
 }
@@ -118,7 +125,8 @@ func (s *PostgresStorage) GetDraft(ctx context.Context, pipelineID uuid.UUID) (m
 		return model.PipelineDraft{}, false, ErrPipelineNotFound
 	}
 	if err != nil {
-		return model.PipelineDraft{}, false, fmt.Errorf("get pipeline draft: %w", err)
+		log.Printf("pipeline storage: get pipeline draft %s: %v", pipelineID, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("get pipeline draft: %w", storage.ErrStorage)
 	}
 	if definitionJSON == nil {
 		return model.PipelineDraft{}, false, nil
@@ -126,7 +134,8 @@ func (s *PostgresStorage) GetDraft(ctx context.Context, pipelineID uuid.UUID) (m
 
 	draft, err := draftFromJSON(pipelineID.String(), nullInt64Ptr(baseRevision), definitionJSON)
 	if err != nil {
-		return model.PipelineDraft{}, false, err
+		log.Printf("pipeline storage: unmarshal draft %s: %v", pipelineID, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("unmarshal pipeline draft: %w", storage.ErrStorage)
 	}
 	return draft, true, nil
 }
@@ -152,12 +161,14 @@ func (s *PostgresStorage) GetLatestRevision(ctx context.Context, pipelineID uuid
 		return model.PipelineDraft{}, false, nil
 	}
 	if err != nil {
-		return model.PipelineDraft{}, false, fmt.Errorf("get latest revision: %w", err)
+		log.Printf("pipeline storage: get latest revision %s: %v", pipelineID, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("get latest revision: %w", storage.ErrStorage)
 	}
 
 	draft, err := draftFromJSON(pipelineID.String(), &revision, definitionJSON)
 	if err != nil {
-		return model.PipelineDraft{}, false, err
+		log.Printf("pipeline storage: unmarshal revision %s: %v", pipelineID, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("unmarshal pipeline revision: %w", storage.ErrStorage)
 	}
 	return draft, true, nil
 }
@@ -181,12 +192,14 @@ func (s *PostgresStorage) GetRevision(ctx context.Context, pipelineID uuid.UUID,
 		return model.PipelineDraft{}, false, nil
 	}
 	if err != nil {
-		return model.PipelineDraft{}, false, fmt.Errorf("get pipeline revision: %w", err)
+		log.Printf("pipeline storage: get pipeline revision %s/%d: %v", pipelineID, revision, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("get pipeline revision: %w", storage.ErrStorage)
 	}
 
 	draft, err := draftFromJSON(pipelineID.String(), &rev, definitionJSON)
 	if err != nil {
-		return model.PipelineDraft{}, false, err
+		log.Printf("pipeline storage: unmarshal revision %s/%d: %v", pipelineID, revision, err)
+		return model.PipelineDraft{}, false, fmt.Errorf("unmarshal pipeline revision: %w", storage.ErrStorage)
 	}
 	return draft, true, nil
 }
@@ -199,7 +212,8 @@ func (s *PostgresStorage) CreateRevision(ctx context.Context, pipelineID uuid.UU
 
 	definitionJSON, err := json.Marshal(definitionFromModel(draft.Definition))
 	if err != nil {
-		return 0, fmt.Errorf("marshal definition: %w", err)
+		log.Printf("pipeline storage: marshal definition: %v", err)
+		return 0, fmt.Errorf("marshal definition: %w", storage.ErrStorage)
 	}
 
 	var revision int32
@@ -211,7 +225,8 @@ func (s *PostgresStorage) CreateRevision(ctx context.Context, pipelineID uuid.UU
 		RETURNING revision
 	`, pipelineID, definitionJSON).Scan(&revision)
 	if err != nil {
-		return 0, fmt.Errorf("create pipeline revision: %w", err)
+		log.Printf("pipeline storage: create pipeline revision %s: %v", pipelineID, err)
+		return 0, fmt.Errorf("create pipeline revision: %w", storage.ErrStorage)
 	}
 	return revision, nil
 }
@@ -224,7 +239,8 @@ func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID uuid.UUID,
 
 	definitionJSON, err := json.Marshal(definitionFromModel(draft.Definition))
 	if err != nil {
-		return fmt.Errorf("marshal definition: %w", err)
+		log.Printf("pipeline storage: marshal definition: %v", err)
+		return fmt.Errorf("marshal definition: %w", storage.ErrStorage)
 	}
 
 	var baseRevision any
@@ -244,7 +260,8 @@ func (s *PostgresStorage) UpsertDraft(ctx context.Context, pipelineID uuid.UUID,
 		return ErrPipelineNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("upsert pipeline draft: %w", err)
+		log.Printf("pipeline storage: upsert pipeline draft %s: %v", pipelineID, err)
+		return fmt.Errorf("upsert pipeline draft: %w", storage.ErrStorage)
 	}
 	return nil
 }
@@ -259,7 +276,8 @@ func (s *PostgresStorage) DeleteDraft(ctx context.Context, pipelineID uuid.UUID)
 		`DELETE FROM pipeline_drafts WHERE pipeline_id = $1`,
 		pipelineID,
 	); err != nil {
-		return fmt.Errorf("delete pipeline draft: %w", err)
+		log.Printf("pipeline storage: delete pipeline draft %s: %v", pipelineID, err)
+		return fmt.Errorf("delete pipeline draft: %w", storage.ErrStorage)
 	}
 	return nil
 }
@@ -275,7 +293,8 @@ func (s *PostgresStorage) PipelineExists(ctx context.Context, pipelineID uuid.UU
 		`SELECT EXISTS (SELECT 1 FROM pipelines WHERE id = $1)`,
 		pipelineID,
 	).Scan(&exists); err != nil {
-		return false, fmt.Errorf("check pipeline: %w", err)
+		log.Printf("pipeline storage: check pipeline %s: %v", pipelineID, err)
+		return false, fmt.Errorf("check pipeline: %w", storage.ErrStorage)
 	}
 	return exists, nil
 }
